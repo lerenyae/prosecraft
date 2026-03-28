@@ -8,6 +8,7 @@ interface SearchReplaceProps {
   editor: TipTapEditor | null;
   isOpen: boolean;
   onClose: () => void;
+  initialTerm?: string;
 }
 
 // Map flat text offset to ProseMirror position
@@ -33,7 +34,7 @@ function textOffsetToPmPos(editor: TipTapEditor, textOffset: number): number {
   return pmPos !== -1 ? pmPos : editor.state.doc.content.size;
 }
 
-export default function SearchReplace({ editor, isOpen, onClose }: SearchReplaceProps) {
+export default function SearchReplace({ editor, isOpen, onClose, initialTerm }: SearchReplaceProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [replaceTerm, setReplaceTerm] = useState('');
   const [showReplace, setShowReplace] = useState(false);
@@ -47,6 +48,13 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
       searchRef.current.focus();
     }
   }, [isOpen]);
+
+  // Set search term from initialTerm prop (e.g. when clicking a filter word)
+  useEffect(() => {
+    if (initialTerm && isOpen) {
+      setSearchTerm(initialTerm);
+    }
+  }, [initialTerm, isOpen]);
 
   // Find all matches in flat text
   const findMatches = useCallback(() => {
