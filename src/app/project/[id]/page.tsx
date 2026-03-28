@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { Menu, ArrowLeft, Eye, BarChart3, MessageSquareText } from 'lucide-react';
@@ -10,12 +10,13 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { FeedbackPanel } from '@/components/FeedbackPanel';
 
 interface ProjectPageProps {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 export default function ProjectPage({ params }: ProjectPageProps) {
+  const resolvedParams = use(params);
   const {
     setCurrentProject,
     currentProject,
@@ -29,8 +30,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   useEffect(() => {
-    setCurrentProject(params.id);
-  }, [params.id, setCurrentProject]);
+    setCurrentProject(resolvedParams.id);
+  }, [resolvedParams.id, setCurrentProject]);
 
   if (!currentProject) {
     return (
