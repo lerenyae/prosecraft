@@ -60,7 +60,7 @@ function getOverusedWords(text: string): { word: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
-export default function InsightsPanel() {
+export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick?: (word: string) => void }) {
   const {
     currentProject,
     currentChapter,
@@ -434,13 +434,14 @@ export default function InsightsPanel() {
           </p>
           <div className="flex flex-wrap gap-1.5">
             {overused.map(({ word, count }) => (
-              <span
+              <button
                 key={word}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-orange-200 dark:bg-orange-500/20 text-orange-900 dark:text-orange-300 border border-orange-400 dark:border-orange-500/30"
+                onClick={() => onFilterWordClick?.(word)}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-amber-600 dark:bg-orange-500/20 text-white dark:text-orange-300 border border-amber-700 dark:border-orange-500/30 hover:bg-amber-700 dark:hover:bg-orange-500/30 transition-colors cursor-pointer"
               >
                 {word}
-                <span className="text-[10px] font-bold bg-orange-300 dark:bg-orange-500/30 px-1 rounded">x{count}</span>
-              </span>
+                <span className="text-[10px] font-bold bg-amber-700 dark:bg-orange-500/30 text-white dark:text-orange-200 px-1 rounded">x{count}</span>
+              </button>
             ))}
           </div>
         </div>
