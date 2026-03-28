@@ -19,6 +19,8 @@ import {
   ChevronRight,
   MousePointerClick,
   Target,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -354,6 +356,15 @@ function AnnotationCard({
 }) {
   const severity = SEVERITY_CONFIG[annotation.severity] || SEVERITY_CONFIG.suggestion;
   const SeverityIcon = severity.icon;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent, text: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <div
@@ -371,6 +382,26 @@ function AnnotationCard({
           <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
             {annotation.note}
           </p>
+          {/* Suggestion with copy button */}
+          {annotation.suggestion && (
+            <div className="mt-2 flex items-start gap-1.5 p-2 rounded bg-[var(--color-bg-primary)]/50 border border-[var(--color-border)]">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-0.5">Consider</p>
+                <p className="text-xs text-[var(--color-text-primary)] leading-relaxed">{annotation.suggestion}</p>
+              </div>
+              <button
+                onClick={(e) => handleCopy(e, annotation.suggestion!)}
+                className="flex-shrink-0 p-1 rounded hover:bg-[var(--color-surface-alt)] transition-colors"
+                title="Copy suggestion"
+              >
+                {copied ? (
+                  <Check size={12} className="text-emerald-500" />
+                ) : (
+                  <Copy size={12} className="text-[var(--color-text-muted)]" />
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

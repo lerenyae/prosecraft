@@ -4,6 +4,8 @@ export interface Project {
   genre: string;
   description: string;
   wordCountGoal: number;
+  goalDeadline?: string; // ISO date string
+  dailyGoal?: number;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,14 +1,16 @@
 'use client';
 
 import { useEffect, useState, useCallback, use } from 'react';
-import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useStore } from '@/lib/store';
 import {
   Menu,
-  ArrowLeft,
   Eye,
   BarChart3,
   Brain,
+  Settings,
+  BookOpen,
+  PenTool,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
@@ -26,6 +28,139 @@ interface ProjectPageProps {
   params: Promise<{
     id: string;
   }>;
+}
+
+// ============================================================================
+// Goal Settings Modal
+// ============================================================================
+
+function GoalSettingsModal({
+  isOpen,
+  onClose,
+  project,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  project: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number };
+  onSave: (updates: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number }) => void;
+}) {
+  const [goal, setGoal] = useState(project.wordCountGoal);
+  const [deadline, setDeadline] = useState(project.goalDeadline || '');
+  const [dailyGoal, setDailyGoal] = useState(project.dailyGoal || 0);
+
+  useEffect(() => {
+    if (isOpen) {
+      setGoal(project.wordCountGoal);
+      setDeadline(project.goalDeadline || '');
+      setDailyGoal(project.dailyGoal || 0);
+    }
+  }, [isOpen, project]);
+
+  // Auto-calculate daily goal from deadline
+  useEffect(() => {
+    if (deadline && goal) {
+      const today = new Date();
+      const end = new Date(deadline);
+      const daysLeft = Math.max(1, Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+      setDailyGoal(Math.ceil(goal / daysLeft));
+    }
+  }, [deadline, goal]);
+
+  if (!isOpen) return null;
+
+  const presets = [
+    { label: 'Short Story', value: 7500 },
+    { label: 'Novella', value: 30000 },
+    { label: 'Novel', value: 80000 },
+    { label: 'Epic', value: 120000 },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-xl shadow-2xl w-[400px] max-w-[90vw] p-6" onClick={e => e.stopPropagation()}>
+        <h2 className="text-base font-semibold text-[var(--color-text-primary)] mb-4">Manuscript Goal</h2>
+
+        {/* Presets */}
+        <div className="flex gap-2 mb-4">
+          {presets.map(p => (
+            <button
+              key={p.value}
+              onClick={() => setGoal(p.value)}
+              className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors ${
+                goal === p.value
+                  ? 'bg-[var(--color-accent)] text-[var(--color-bg-primary)] border-[var(--color-accent)]'
+                  : 'bg-[var(--color-surface)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Word count goal */}
+        <label className="block mb-4">
+          <span className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Total Word Goal</span>
+          <input
+            type="number"
+            value={goal}
+            onChange={e => setGoal(Number(e.target.value))}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </label>
+
+        {/* Deadline */}
+        <label className="block mb-4">
+          <span className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Deadline</span>
+          <input
+            type="date"
+            value={deadline}
+            onChange={e => setDeadline(e.target.value)}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+        </label>
+
+        {/* Daily goal */}
+        <label className="block mb-5">
+          <span className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Daily Word Goal</span>
+          <input
+            type="number"
+            value={dailyGoal}
+            onChange={e => setDailyGoal(Number(e.target.value))}
+            className="mt-1 w-full px-3 py-2 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)]"
+          />
+          {deadline && (
+            <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
+              Auto-calculated from deadline. Adjust manually if needed.
+            </p>
+          )}
+        </label>
+
+        {/* Actions */}
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-[var(--color-text-secondary)] bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              onSave({
+                wordCountGoal: goal,
+                goalDeadline: deadline || undefined,
+                dailyGoal: dailyGoal || undefined,
+              });
+              onClose();
+            }}
+            className="flex-1 px-4 py-2 rounded-lg text-sm font-medium bg-[var(--color-accent)] text-[var(--color-bg-primary)] hover:bg-[var(--color-accent-dark)] transition-colors"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
@@ -123,16 +258,17 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const {
     setCurrentProject,
     currentProject,
+    updateProject,
     toggleSidebar,
     sidebarOpen,
     toggleFocusMode,
     focusMode,
     projectWordCount,
+    projectChapters,
   } = useStore();
-  const router = useRouter();
-
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
+  const [showGoalSettings, setShowGoalSettings] = useState(false);
 
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
@@ -151,6 +287,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     console.log('Navigate to:', quote);
   }, []);
 
+  const handleGoalSave = useCallback((updates: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number }) => {
+    if (currentProject) {
+      updateProject(currentProject.id, updates as any);
+    }
+  }, [currentProject, updateProject]);
+
   if (!currentProject) {
     return (
       <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] flex items-center justify-center">
@@ -159,13 +301,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           <p className="text-[var(--color-text-secondary)] mb-6">
             This manuscript could not be loaded.
           </p>
-          <button
-            onClick={() => router.push('/dashboard')}
+          <Link
+            href="/dashboard"
             className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium hover:bg-[var(--color-accent-dark)] transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" />
             Back to Dashboard
-          </button>
+          </Link>
         </div>
       </div>
     );
@@ -173,12 +314,31 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   return (
     <div className="flex flex-col h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-primary)]">
+      {/* Goal Settings Modal */}
+      <GoalSettingsModal
+        isOpen={showGoalSettings}
+        onClose={() => setShowGoalSettings(false)}
+        project={currentProject as any}
+        onSave={handleGoalSave}
+      />
+
       {/* Top Bar */}
       {!focusMode && (
         <div className="flex-shrink-0 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]">
           <div className="flex items-center justify-between px-4 py-2.5 gap-4">
-            {/* Left */}
+            {/* Left: Logo + Sidebar toggle + Title */}
             <div className="flex items-center gap-2">
+              <Link
+                href="/dashboard"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--color-surface-alt)] transition-colors group"
+                title="Back to dashboard"
+              >
+                <PenTool className="w-4 h-4 text-[var(--color-accent)]" />
+                <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
+                  ProseCraft
+                </span>
+              </Link>
+              <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
               <button
                 onClick={toggleSidebar}
                 className="p-2 hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
@@ -186,28 +346,45 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               >
                 <Menu className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="p-2 hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors"
-                title="Back to dashboard"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-              <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
-              <h1 className="text-sm font-semibold truncate max-w-[200px]">
+              <h1 className="text-sm font-semibold truncate max-w-[200px] text-[var(--color-text-secondary)]">
                 {currentProject.title}
               </h1>
             </div>
 
-            {/* Right */}
-            <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Right: Stats + Actions */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
               {/* Word Count */}
-              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[var(--color-surface-alt)] rounded-md">
+              <button
+                onClick={() => setActivePanel(activePanel === 'insights' ? null : 'insights')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--color-surface-alt)] rounded-md hover:bg-[var(--color-surface)] transition-colors"
+                title="Toggle insights panel"
+              >
                 <BarChart3 className="w-3.5 h-3.5 text-[var(--color-accent)]" />
                 <span className="text-xs font-medium">
                   {projectWordCount.toLocaleString()}
                 </span>
-              </div>
+              </button>
+
+              {/* Chapters count */}
+              <button
+                onClick={toggleSidebar}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[var(--color-surface-alt)] rounded-md hover:bg-[var(--color-surface)] transition-colors"
+                title="Toggle sidebar"
+              >
+                <BookOpen className="w-3.5 h-3.5 text-[var(--color-text-muted)]" />
+                <span className="text-xs font-medium">
+                  {projectChapters.length} ch
+                </span>
+              </button>
+
+              {/* Goal Settings */}
+              <button
+                onClick={() => setShowGoalSettings(true)}
+                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
+                title="Manuscript goal settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
 
               {/* Focus Mode */}
               <button

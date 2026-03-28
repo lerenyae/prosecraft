@@ -98,7 +98,14 @@ export default function InsightsPanel() {
   const sentenceCount = (allText.match(/[.!?]+/g) || []).length;
 
   const goal = currentProject?.wordCountGoal || 50000;
+  const dailyGoal = (currentProject as any)?.dailyGoal || 0;
+  const goalDeadline = (currentProject as any)?.goalDeadline || '';
   const progress = Math.min(100, Math.round((projectWordCount / goal) * 100));
+
+  // Calculate days remaining
+  const daysRemaining = goalDeadline
+    ? Math.max(0, Math.ceil((new Date(goalDeadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
 
   // SVG circle for progress ring
   const radius = 36;
@@ -168,6 +175,41 @@ export default function InsightsPanel() {
           </div>
         </div>
       </div>
+
+      {/* Daily Goal & Deadline */}
+      {(dailyGoal > 0 || goalDeadline) && (
+        <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+          {dailyGoal > 0 && (
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Today&apos;s Goal</p>
+                <span className="text-xs font-medium text-[var(--color-text-secondary)]">
+                  {sessionWords}/{dailyGoal.toLocaleString()}
+                </span>
+              </div>
+              <div className="h-2 bg-[var(--color-border)] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    sessionWords >= dailyGoal ? 'bg-emerald-500' : 'bg-[var(--color-accent)]'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.round((sessionWords / dailyGoal) * 100))}%` }}
+                />
+              </div>
+              {sessionWords >= dailyGoal && (
+                <p className="text-xs text-emerald-500 font-medium mt-1.5">Daily goal reached!</p>
+              )}
+            </div>
+          )}
+          {daysRemaining !== null && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-[var(--color-text-muted)]">Deadline</p>
+              <p className="text-xs font-medium text-[var(--color-text-secondary)]">
+                {daysRemaining === 0 ? 'Today!' : `${daysRemaining} days left`}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Reading Stats */}
       <div className="grid grid-cols-3 gap-2">

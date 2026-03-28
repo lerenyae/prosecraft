@@ -24,6 +24,7 @@ interface StoreState {
   darkMode: boolean;
   sidebarOpen: boolean;
   focusMode: boolean;
+  _dataVersion: number; // bumped on every chapter/scene mutation to invalidate memos
 }
 
 type StoreAction =
@@ -112,6 +113,7 @@ const initialState: StoreState = {
   darkMode: false,
   sidebarOpen: true,
   focusMode: false,
+  _dataVersion: 0,
 };
 
 // ============================================================================
@@ -156,31 +158,18 @@ function storeReducer(state: StoreState, action: StoreAction): StoreState {
     }
 
     case 'CREATE_CHAPTER': {
-      return {
-        ...state,
-        projects: state.projects.map((p) =>
-          p.id === action.payload.projectId
-            ? p
-            : p
-        ),
-      };
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'UPDATE_CHAPTER': {
-      return {
-        ...state,
-        projects: state.projects.map((p) =>
-          p.id === state.currentProjectId
-            ? p
-            : p
-        ),
-      };
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'DELETE_CHAPTER': {
       const deletedChapterId = action.payload;
       return {
         ...state,
+        _dataVersion: state._dataVersion + 1,
         currentChapterId:
           state.currentChapterId === deletedChapterId
             ? null
@@ -190,21 +179,22 @@ function storeReducer(state: StoreState, action: StoreAction): StoreState {
     }
 
     case 'REORDER_CHAPTERS': {
-      return state;
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'CREATE_SCENE': {
-      return state;
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'UPDATE_SCENE': {
-      return state;
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'DELETE_SCENE': {
       const deletedSceneId = action.payload;
       return {
         ...state,
+        _dataVersion: state._dataVersion + 1,
         currentSceneId:
           state.currentSceneId === deletedSceneId
             ? null
@@ -213,7 +203,7 @@ function storeReducer(state: StoreState, action: StoreAction): StoreState {
     }
 
     case 'REORDER_SCENES': {
-      return state;
+      return { ...state, _dataVersion: state._dataVersion + 1 };
     }
 
     case 'SET_CURRENT_PROJECT':
@@ -671,14 +661,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       safeGetItem('prosecraft-chapters') || '{}'
     );
     return stored;
-  }, [state.projects]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state._dataVersion]);
 
   const allScenes = useMemo(() => {
     const stored = JSON.parse(
       safeGetItem('prosecraft-scenes') || '{}'
     );
     return stored;
-  }, [state]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state._dataVersion]);
 
   const currentProject = useMemo(
     () =>

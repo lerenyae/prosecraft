@@ -30,7 +30,8 @@ Analyze the chapter and return annotations in this exact JSON format:
       "type": "show-dont-tell" | "pacing" | "dialogue" | "pov" | "tension" | "prose" | "structure",
       "severity": "praise" | "suggestion" | "warning",
       "quote": "exact short quote from the text (max 80 chars)",
-      "note": "your editorial observation — be specific and actionable"
+      "note": "your editorial observation — be specific and actionable",
+      "suggestion": "a concrete rewrite or alternative the writer could use (only for severity suggestion/warning, omit for praise)"
     }
   ],
   "summary": {
@@ -52,6 +53,8 @@ Rules:
 - For prose: flag overwriting, cliches, filter words, passive voice
 - For structure: flag scene transitions, chapter arc, opening/closing strength
 - Severity "praise" = something that works well, "suggestion" = could be better, "warning" = needs attention
+- For suggestions and warnings, include a "suggestion" field with a concrete rewrite or alternative
+- For praise, omit the "suggestion" field
 - Return ONLY valid JSON, no markdown wrapping`;
 }
 
@@ -66,7 +69,8 @@ Analyze the selected passage and return feedback in this exact JSON format:
       "type": "show-dont-tell" | "pacing" | "dialogue" | "pov" | "tension" | "prose" | "structure",
       "severity": "praise" | "suggestion" | "warning",
       "quote": "exact short quote from the selection (max 80 chars)",
-      "note": "your editorial observation — specific and actionable"
+      "note": "your editorial observation — specific and actionable",
+      "suggestion": "a concrete rewrite or alternative (only for suggestion/warning severity, omit for praise)"
     }
   ],
   "summary": {

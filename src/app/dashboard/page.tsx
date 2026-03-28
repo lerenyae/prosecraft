@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { Plus, BookOpen, Calendar } from 'lucide-react';
+import { Plus, BookOpen, Calendar, PenTool } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const GENRE_OPTIONS = [
@@ -62,9 +62,9 @@ export default function Dashboard() {
       {/* Top Bar */}
       <div className="sticky top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]/95 backdrop-blur">
         <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <BookOpen className="w-6 h-6" strokeWidth={2} />
-            <h1 className="text-2xl font-semibold tracking-tight">ProseCraft</h1>
+          <div className="flex items-center gap-2">
+            <PenTool className="w-5 h-5 text-[var(--color-accent)]" />
+            <h1 className="text-xl font-bold tracking-tight">ProseCraft</h1>
           </div>
           <ThemeToggle />
         </div>
