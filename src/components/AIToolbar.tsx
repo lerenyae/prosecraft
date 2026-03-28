@@ -199,7 +199,7 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
   const hasSelection = selectedText.length > 5;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col overflow-y-auto">
       {/* Selection Preview */}
       <div className="p-4 border-b border-[var(--color-border)]">
         {hasSelection ? (
