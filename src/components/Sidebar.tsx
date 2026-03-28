@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -515,11 +515,15 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
     setExpandedChapters((prev) => ({ ...prev, [chapterId]: true }));
   };
 
-  // Clicking a chapter selects it and its first scene
+  // Clicking a chapter selects it, its first scene, and expands scenes if multiple
   const handleSelectChapter = (chapterId: string) => {
     setCurrentChapter(chapterId);
     const scenes = chapterScenes(chapterId);
     if (scenes.length > 0) setCurrentScene(scenes[0].id);
+    // Auto-expand if chapter has multiple scenes
+    if (scenes.length > 1) {
+      setExpandedChapters((prev) => ({ ...prev, [chapterId]: true }));
+    }
   };
 
   const handleSelectScene = (chapterId: string, sceneId: string) => {
@@ -548,9 +552,30 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
     setRenameValue('');
   };
 
-  const handleShowMenu = (key: string) => {
-    setMenuOpen((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
+  const handleShowMenu = useCallback((key: string) => {
+    setMenuOpen((prev) => {
+      const isCurrentlyOpen = prev[key];
+      // Close all menus, then toggle the requested one
+      const reset: MenuOpen = {};
+      if (!isCurrentlyOpen) reset[key] = true;
+      return reset;
+    });
+  }, []);
+
+  // Close context menu on any outside click
+  useEffect(() => {
+    const hasOpenMenu = Object.values(menuOpen).some(Boolean);
+    if (!hasOpenMenu) return;
+    const handleClickOutside = () => setMenuOpen({});
+    // Use a slight delay so the toggle click doesn't immediately close
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [menuOpen]);
 
   const handleChapterDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
