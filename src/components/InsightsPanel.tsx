@@ -63,6 +63,7 @@ function getOverusedWords(text: string): { word: string; count: number }[] {
 export default function InsightsPanel() {
   const {
     currentProject,
+    currentChapter,
     projectChapters,
     chapterScenes,
     projectWordCount,
@@ -99,6 +100,13 @@ export default function InsightsPanel() {
     return texts.join(' ');
   }, [currentProject, projectChapters, chapterScenes]);
 
+  // Per-chapter text for word analysis (falls back to all text if no chapter selected)
+  const chapterText = useMemo(() => {
+    if (!currentChapter) return allText;
+    const scenes = chapterScenes(currentChapter.id);
+    return scenes.map(s => s.content ? stripHtml(s.content) : '').join(' ');
+  }, [currentChapter, chapterScenes, allText]);
+
   const runGrammarCheck = useCallback(async () => {
     if (!currentProject || !allText || allText.length < 50) return;
     setGrammarLoading(true);
@@ -126,8 +134,8 @@ export default function InsightsPanel() {
     }
   }, [currentProject, allText, projectChapters, chapterScenes]);
 
-  const topWords = useMemo(() => getTopWords(allText, 8), [allText]);
-  const overused = useMemo(() => getOverusedWords(allText), [allText]);
+  const topWords = useMemo(() => getTopWords(chapterText, 8), [chapterText]);
+  const overused = useMemo(() => getOverusedWords(chapterText), [chapterText]);
   const maxWordCount = topWords[0]?.count || 1;
 
   const readingTime = Math.max(1, Math.round(projectWordCount / 250));
@@ -295,7 +303,9 @@ export default function InsightsPanel() {
       {/* Most Used Words */}
       {topWords.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Most Used Words</p>
+          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
+            Most Used Words {currentChapter ? `— ${currentChapter.title}` : '— All Chapters'}
+          </p>
           <div className="flex flex-col gap-1.5">
             {topWords.map(({ word, count }) => (
               <div key={word} className="flex items-center gap-2">
@@ -365,7 +375,7 @@ export default function InsightsPanel() {
               {grammarResult.grammar.issues.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {grammarResult.grammar.issues.slice(0, 3).map((issue, i) => (
-                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">{issue}</span>
+                    <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-200 dark:bg-amber-500/15 text-orange-900 dark:text-amber-300 border border-orange-400 dark:border-amber-500/20">{issue}</span>
                   ))}
                 </div>
               )}
@@ -395,7 +405,7 @@ export default function InsightsPanel() {
               {grammarResult.language.qualities.length > 0 && (
                 <div className="mt-1.5 flex flex-wrap gap-1">
                   {grammarResult.language.qualities.slice(0, 3).map((q, i) => (
-                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15">{q}</span>
+                    <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-500/15 text-emerald-900 dark:text-emerald-300 border border-emerald-400 dark:border-emerald-500/20">{q}</span>
                   ))}
                 </div>
               )}
@@ -419,15 +429,17 @@ export default function InsightsPanel() {
       {/* Overused Words Warning */}
       {overused.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Filter Words to Watch</p>
+          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
+            Filter Words to Watch {currentChapter ? `— ${currentChapter.title}` : ''}
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {overused.map(({ word, count }) => (
               <span
                 key={word}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-orange-200 dark:bg-orange-500/20 text-orange-900 dark:text-orange-300 border border-orange-400 dark:border-orange-500/30"
               >
                 {word}
-                <span className="text-[10px] opacity-70">x{count}</span>
+                <span className="text-[10px] font-bold bg-orange-300 dark:bg-orange-500/30 px-1 rounded">x{count}</span>
               </span>
             ))}
           </div>

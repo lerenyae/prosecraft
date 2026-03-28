@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState, useCallback, use } from 'react';
+import { useEffect, useState, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
+import { Editor as TipTapEditor } from '@tiptap/react';
 import {
   Menu,
   Eye,
@@ -12,12 +13,17 @@ import {
   BookOpen,
   PenTool,
   Download,
+  Search,
+  FileText,
+  FileType,
+  ChevronDown,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import InsightsPanel from '@/components/InsightsPanel';
 import BetaReaderPanel from '@/components/BetaReaderPanel';
+import SearchReplace from '@/components/SearchReplace';
 
 // ============================================================================
 // Types
@@ -271,10 +277,42 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
   const [showGoalSettings, setShowGoalSettings] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [editorInstance, setEditorInstance] = useState<TipTapEditor | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
   }, [resolvedParams.id, setCurrentProject]);
+
+  // Close export menu on click outside
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showExportMenu]);
+
+  // Keyboard shortcut: Cmd+F for search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        e.preventDefault();
+        setShowSearch(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleEditorReady = useCallback((editor: TipTapEditor) => {
+    setEditorInstance(editor);
+  }, []);
 
   const handleSelectionChange = useCallback((text: string) => {
     setSelectedText(text);
@@ -295,16 +333,21 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }, [currentProject, updateProject]);
 
-  const handleExport = useCallback(async () => {
-    if (!currentProject) return;
+  // Build manuscript data for export
+  const getManuscriptData = useCallback(() => {
+    if (!currentProject) return { text: '', html: '', chapters: [] as { title: string; html: string; text: string }[] };
 
-    // Build full manuscript text
-    let manuscript = `${currentProject.title}\n\n`;
+    let text = `${currentProject.title}\n\n`;
+    let html = `<h1>${currentProject.title}</h1>`;
+    const chapters: { title: string; html: string; text: string }[] = [];
+
     projectChapters.forEach((chapter) => {
-      manuscript += `\n\n${chapter.title}\n\n`;
+      let chapterText = '';
+      let chapterHtml = '';
       const scenes = chapterScenes(chapter.id);
       scenes.forEach((scene) => {
-        const text = scene.content
+        chapterHtml += scene.content || '';
+        const sceneText = (scene.content || '')
           .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
           .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
           .replace(/<br\s*\/?>/gi, '\n')
@@ -316,12 +359,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           .replace(/&quot;/g, '"')
           .replace(/&#039;/g, "'")
           .replace(/\n{3,}/g, '\n\n');
-        manuscript += text;
+        chapterText += sceneText;
       });
+      chapters.push({ title: chapter.title, html: chapterHtml, text: chapterText });
+      text += `\n\n${chapter.title}\n\n${chapterText}`;
+      html += `<h2>${chapter.title}</h2>${chapterHtml}`;
     });
 
-    // Download as .txt
-    const blob = new Blob([manuscript], { type: 'text/plain' });
+    return { text, html, chapters };
+  }, [currentProject, projectChapters, chapterScenes]);
+
+  const handleExportTxt = useCallback(() => {
+    if (!currentProject) return;
+    const { text } = getManuscriptData();
+    const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -330,7 +381,72 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [currentProject, projectChapters, chapterScenes]);
+  }, [currentProject, getManuscriptData]);
+
+  const handleExportPdf = useCallback(() => {
+    if (!currentProject) return;
+    const { html } = getManuscriptData();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>${currentProject.title}</title>
+      <style>
+        body { font-family: Georgia, 'Times New Roman', serif; max-width: 6.5in; margin: 1in auto; line-height: 1.8; color: #1a1a1a; font-size: 12pt; }
+        h1 { text-align: center; font-size: 24pt; margin-bottom: 2em; page-break-after: avoid; }
+        h2 { font-size: 18pt; margin-top: 2em; page-break-after: avoid; }
+        h3 { font-size: 14pt; page-break-after: avoid; }
+        p { margin: 0 0 0.8em 0; text-indent: 1.5em; }
+        p:first-child, h1 + p, h2 + p, h3 + p { text-indent: 0; }
+        blockquote { margin: 1em 2em; font-style: italic; border-left: 3px solid #ccc; padding-left: 1em; }
+        @media print { body { margin: 0; } }
+      </style></head><body>${html}</body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => printWindow.print(), 500);
+  }, [currentProject, getManuscriptData]);
+
+  const handleExportDocx = useCallback(async () => {
+    if (!currentProject) return;
+    const { chapters } = getManuscriptData();
+
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
+    const { saveAs } = await import('file-saver');
+
+    const docChildren: any[] = [
+      new Paragraph({
+        text: currentProject.title,
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 600 },
+      }),
+    ];
+
+    chapters.forEach((ch) => {
+      docChildren.push(
+        new Paragraph({
+          text: ch.title,
+          heading: HeadingLevel.HEADING_1,
+          spacing: { before: 400, after: 200 },
+        })
+      );
+      // Split chapter text into paragraphs
+      const paras = ch.text.split(/\n\n+/).filter((p: string) => p.trim());
+      paras.forEach((p: string) => {
+        docChildren.push(
+          new Paragraph({
+            children: [new TextRun({ text: p.trim(), font: 'Times New Roman', size: 24 })],
+            spacing: { after: 200, line: 360 },
+          })
+        );
+      });
+    });
+
+    const doc = new Document({
+      sections: [{ properties: {}, children: docChildren }],
+    });
+
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, `${currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.docx`);
+  }, [currentProject, getManuscriptData]);
 
   if (!currentProject) {
     return (
@@ -416,14 +532,51 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </span>
               </button>
 
-              {/* Export */}
+              {/* Search */}
               <button
-                onClick={handleExport}
-                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
-                title="Export manuscript"
+                onClick={() => setShowSearch(!showSearch)}
+                className={`p-2 rounded-lg transition-colors ${showSearch ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]' : 'hover:bg-[var(--color-surface-alt)]'}`}
+                title="Search & Replace (Cmd+F)"
               >
-                <Download className="w-4 h-4" />
+                <Search className="w-4 h-4" />
               </button>
+
+              {/* Export */}
+              <div ref={exportRef} className="relative">
+                <button
+                  onClick={() => setShowExportMenu(!showExportMenu)}
+                  className={`flex items-center gap-1 p-2 rounded-lg transition-colors ${showExportMenu ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]' : 'hover:bg-[var(--color-surface-alt)]'}`}
+                  title="Export manuscript"
+                >
+                  <Download className="w-4 h-4" />
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={() => { handleExportTxt(); setShowExportMenu(false); }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+                    >
+                      <FileText className="w-4 h-4 text-[var(--color-text-muted)]" />
+                      Plain Text (.txt)
+                    </button>
+                    <button
+                      onClick={() => { handleExportPdf(); setShowExportMenu(false); }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+                    >
+                      <FileType className="w-4 h-4 text-red-500" />
+                      PDF (.pdf)
+                    </button>
+                    <button
+                      onClick={() => { handleExportDocx(); setShowExportMenu(false); }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
+                    >
+                      <FileType className="w-4 h-4 text-blue-500" />
+                      Word (.docx)
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Goal Settings */}
               <button
@@ -470,8 +623,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         )}
 
         {/* Editor */}
-        <div className="flex-1 overflow-hidden">
-          <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} />
+        <div className="flex-1 overflow-hidden relative">
+          <SearchReplace editor={editorInstance} isOpen={showSearch} onClose={() => setShowSearch(false)} />
+          <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} onEditorReady={handleEditorReady} />
         </div>
 
         {/* Right Panel */}

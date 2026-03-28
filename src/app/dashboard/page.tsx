@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { Plus, BookOpen, Calendar, PenTool } from 'lucide-react';
+import { Plus, Calendar, PenTool, Upload, Trash2 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const GENRE_OPTIONS = [
@@ -12,15 +12,27 @@ const GENRE_OPTIONS = [
   'Fantasy/Sci-Fi',
   'Literary Fiction',
   'Memoir/Nonfiction',
+  'Horror',
+  'Historical Fiction',
+  'Young Adult',
+  'Children\'s',
+  'Poetry',
+  'Screenplay',
   'Other',
 ];
 
 export default function Dashboard() {
-  const { projects, createProject } = useStore();
+  const { projects, createProject, deleteProject, createChapter, createScene, updateScene } = useStore();
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [title, setTitle] = useState('');
   const [genre, setGenre] = useState(GENRE_OPTIONS[0]);
+  const [description, setDescription] = useState('');
+  const [importText, setImportText] = useState('');
+  const [importFileName, setImportFileName] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,8 +40,77 @@ export default function Dashboard() {
       const newProject = createProject(title.trim(), genre);
       setTitle('');
       setGenre(GENRE_OPTIONS[0]);
+      setDescription('');
       setShowModal(false);
       router.push(`/project/${newProject.id}`);
+    }
+  };
+
+  const handleImport = () => {
+    if (!title.trim() || !importText.trim()) return;
+
+    const newProject = createProject(title.trim(), genre);
+
+    // Split imported text into chapters by common patterns
+    const chapterSplits = importText.split(/\n(?=(?:Chapter|CHAPTER)\s+\d+|(?:Part|PART)\s+\w+)/i);
+
+    if (chapterSplits.length > 1) {
+      // Multiple chapters detected
+      chapterSplits.forEach((chapterText, i) => {
+        const lines = chapterText.trim().split('\n');
+        const chapterTitle = lines[0].length < 60 ? lines[0] : `Chapter ${i + 1}`;
+        const content = lines.slice(1).join('\n').trim();
+
+        const chapter = createChapter(newProject.id, chapterTitle);
+        // createChapter auto-creates a Scene 1; find it from localStorage
+        const allScenes = JSON.parse(localStorage.getItem('prosecraft-scenes') || '{}');
+        const autoScene = Object.values(allScenes).find((s: any) => s.chapterId === chapter.id) as any;
+        if (autoScene) {
+          const htmlContent = content.split('\n\n').map((p: string) => `<p>${p}</p>`).join('');
+          const wordCount = content.trim().split(/\s+/).filter((w: string) => w.length > 0).length;
+          updateScene(autoScene.id, { content: htmlContent, wordCount });
+        }
+      });
+    } else {
+      // Single chapter for whole text
+      const chapter = createChapter(newProject.id, 'Chapter 1');
+      const scene = createScene(chapter.id);
+      const htmlContent = importText.split('\n\n').map((p: string) => `<p>${p}</p>`).join('');
+      const wordCount = importText.trim().split(/\s+/).filter((w: string) => w.length > 0).length;
+      updateScene(scene.id, { content: htmlContent, wordCount });
+    }
+
+    setTitle('');
+    setGenre(GENRE_OPTIONS[0]);
+    setImportText('');
+    setImportFileName('');
+    setShowImportModal(false);
+    router.push(`/project/${newProject.id}`);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFileName(file.name);
+    if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      setImportText(text);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleDeleteProject = (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirmDelete === projectId) {
+      deleteProject(projectId);
+      setConfirmDelete(null);
+    } else {
+      setConfirmDelete(projectId);
+      setTimeout(() => setConfirmDelete(null), 3000);
     }
   };
 
@@ -52,6 +133,9 @@ export default function Dashboard() {
       'Fantasy/Sci-Fi': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300',
       'Literary Fiction': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
       'Memoir/Nonfiction': 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+      'Horror': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+      'Historical Fiction': 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300',
+      'Young Adult': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
       'Other': 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
     };
     return colors[g] || colors['Other'];
@@ -75,23 +159,32 @@ export default function Dashboard() {
         {projects.length === 0 ? (
           /* Empty State */
           <div className="flex flex-col items-center justify-center py-20">
-            <BookOpen className="w-16 h-16 text-[var(--color-accent-light)] mb-6" strokeWidth={1.5} />
-            <h2 className="text-3xl font-semibold mb-3 text-center">Create your first manuscript</h2>
+            <PenTool className="w-16 h-16 text-[var(--color-accent-light)] mb-6" strokeWidth={1.5} />
+            <h2 className="text-3xl font-semibold mb-3 text-center">Start your next manuscript</h2>
             <p className="text-[var(--color-text-secondary)] mb-8 max-w-md text-center">
-              Start writing your next great work. Whether fiction or nonfiction, ProseCraft helps you organize,
-              develop, and refine your writing.
+              Create from scratch or import an existing manuscript. ProseCraft helps you organize,
+              develop, and refine your writing with AI-powered tools.
             </p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium hover:bg-[var(--color-accent-dark)] transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              New Project
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium hover:bg-[var(--color-accent-dark)] transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                New Project
+              </button>
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors"
+              >
+                <Upload className="w-5 h-5" />
+                Import Manuscript
+              </button>
+            </div>
           </div>
         ) : (
           <>
-            {/* Header with CTA */}
+            {/* Header with CTAs */}
             <div className="flex items-center justify-between mb-8">
               <div>
                 <h2 className="text-3xl font-semibold mb-1">Your Manuscripts</h2>
@@ -99,13 +192,22 @@ export default function Dashboard() {
                   {projects.length} {projects.length === 1 ? 'project' : 'projects'}
                 </p>
               </div>
-              <button
-                onClick={() => setShowModal(true)}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium hover:bg-[var(--color-accent-dark)] transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                New Project
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm"
+                >
+                  <Upload className="w-4 h-4" />
+                  Import
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium hover:bg-[var(--color-accent-dark)] transition-colors text-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  New Project
+                </button>
+              </div>
             </div>
 
             {/* Projects Grid */}
@@ -114,8 +216,21 @@ export default function Dashboard() {
                 <div
                   key={project.id}
                   onClick={() => handleProjectClick(project.id)}
-                  className="group cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 hover:border-[var(--color-accent-light)] hover:shadow-lg transition-all duration-300"
+                  className="group cursor-pointer bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 hover:border-[var(--color-accent-light)] hover:shadow-lg transition-all duration-300 relative"
                 >
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => handleDeleteProject(project.id, e)}
+                    className={`absolute top-3 right-3 p-1.5 rounded-lg transition-all ${
+                      confirmDelete === project.id
+                        ? 'bg-red-500 text-white'
+                        : 'opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30'
+                    }`}
+                    title={confirmDelete === project.id ? 'Click again to confirm delete' : 'Delete project'}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+
                   {/* Genre Badge */}
                   <div className="mb-4">
                     <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getGenreBadgeColor(project.genre)}`}>
@@ -176,7 +291,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* New Project Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--color-surface)] rounded-lg shadow-xl max-w-md w-full border border-[var(--color-border)]">
@@ -191,9 +306,7 @@ export default function Dashboard() {
 
                 {/* Title Input */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Project Title
-                  </label>
+                  <label className="block text-sm font-medium mb-2">Project Title</label>
                   <input
                     type="text"
                     value={title}
@@ -206,20 +319,28 @@ export default function Dashboard() {
 
                 {/* Genre Select */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Genre
-                  </label>
+                  <label className="block text-sm font-medium mb-2">Genre</label>
                   <select
                     value={genre}
                     onChange={(e) => setGenre(e.target.value)}
                     className="w-full px-4 py-2 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-[var(--color-text-primary)]"
                   >
                     {GENRE_OPTIONS.map((g) => (
-                      <option key={g} value={g}>
-                        {g}
-                      </option>
+                      <option key={g} value={g}>{g}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Description <span className="text-[var(--color-text-muted)] font-normal">(optional)</span></label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="A brief summary of your project..."
+                    rows={2}
+                    className="w-full px-4 py-2 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] resize-none"
+                  />
                 </div>
               </div>
 
@@ -227,7 +348,7 @@ export default function Dashboard() {
               <div className="flex gap-3 px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => { setShowModal(false); setTitle(''); setDescription(''); }}
                   className="flex-1 px-4 py-2 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors font-medium"
                 >
                   Cancel
@@ -241,6 +362,105 @@ export default function Dashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface)] rounded-lg shadow-xl max-w-lg w-full border border-[var(--color-border)]">
+            <div className="p-6 space-y-5">
+              <div>
+                <h2 className="text-2xl font-semibold mb-1">Import Manuscript</h2>
+                <p className="text-sm text-[var(--color-text-secondary)]">
+                  Import a .txt file or paste your manuscript text. Chapters are auto-detected.
+                </p>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Project Title</label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g., My Novel"
+                  className="w-full px-4 py-2 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)]"
+                  autoFocus
+                />
+              </div>
+
+              {/* Genre */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Genre</label>
+                <select
+                  value={genre}
+                  onChange={(e) => setGenre(e.target.value)}
+                  className="w-full px-4 py-2 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-[var(--color-text-primary)]"
+                >
+                  {GENRE_OPTIONS.map((g) => (
+                    <option key={g} value={g}>{g}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Upload File</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.md,.rtf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--color-bg-secondary)] border-2 border-dashed border-[var(--color-border)] rounded-lg hover:border-[var(--color-accent-light)] transition-colors text-sm text-[var(--color-text-secondary)]"
+                >
+                  <Upload size={16} />
+                  {importFileName || 'Choose a .txt file'}
+                </button>
+              </div>
+
+              {/* Or paste */}
+              <div>
+                <label className="block text-sm font-medium mb-2">Or Paste Text</label>
+                <textarea
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                  placeholder="Paste your manuscript text here..."
+                  rows={6}
+                  className="w-full px-4 py-2 bg-[var(--color-bg-secondary)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-accent)] focus:border-transparent text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] resize-none text-sm"
+                />
+                {importText && (
+                  <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                    {importText.trim().split(/\s+/).filter(w => w.length > 0).length.toLocaleString()} words detected
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 px-6 py-4 border-t border-[var(--color-border)] bg-[var(--color-bg-secondary)]">
+              <button
+                type="button"
+                onClick={() => { setShowImportModal(false); setTitle(''); setImportText(''); setImportFileName(''); }}
+                className="flex-1 px-4 py-2 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleImport}
+                disabled={!title.trim() || !importText.trim()}
+                className="flex-1 px-4 py-2 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              >
+                Import
+              </button>
+            </div>
           </div>
         </div>
       )}

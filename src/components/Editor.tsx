@@ -155,9 +155,10 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
 interface EditorProps {
   onSelectionChange?: (text: string) => void;
   hasActiveSelection?: boolean;
+  onEditorReady?: (editor: TipTapEditor) => void;
 }
 
-export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
+export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }: EditorProps) {
   const {
     currentScene,
     updateScene,
@@ -255,6 +256,13 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
       }
     }
   }, [editor, currentScene?.id]);
+
+  // Notify parent when editor is ready
+  useEffect(() => {
+    if (editor && onEditorReady) {
+      onEditorReady(editor);
+    }
+  }, [editor, onEditorReady]);
 
   // Cleanup
   useEffect(() => {

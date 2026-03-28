@@ -21,7 +21,7 @@ import { useStore } from '@/lib/store';
 // ============================================================================
 
 type AIAction =
-  | 'improve-prose'
+  | 'improve'
   | 'show-dont-tell'
   | 'tighten'
   | 'expand'
@@ -48,9 +48,42 @@ interface FeedbackResponse {
 
 type APIResponse = DiffResponse | FeedbackResponse;
 
+// The API returns { result, action } — we transform it into our expected shape
+interface RawAPIResponse {
+  result: string | Record<string, unknown>;
+  action: string;
+}
+
 // ============================================================================
 // Toolbar Component
 // ============================================================================
+
+// Format structured dialogue coach feedback into readable text
+function formatDialogueFeedback(result: Record<string, unknown>): string {
+  const lines: string[] = [];
+  const vc = result.voiceConsistency as Record<string, unknown> | undefined;
+  const nat = result.naturalism as Record<string, unknown> | undefined;
+  const sub = result.subtext as Record<string, unknown> | undefined;
+  const info = result.infoDumping as Record<string, unknown> | undefined;
+
+  if (vc) {
+    lines.push(`Voice Consistency: ${vc.consistent ? 'Consistent' : 'Inconsistent'}`);
+    if (Array.isArray(vc.issues) && vc.issues.length) lines.push(`  Issues: ${vc.issues.join(', ')}`);
+  }
+  if (nat) {
+    lines.push(`Naturalism: ${nat.rating}/5 — ${nat.notes}`);
+  }
+  if (sub) {
+    lines.push(`Subtext: ${sub.present ? 'Present' : 'Missing'}`);
+    if (Array.isArray(sub.examples) && sub.examples.length) lines.push(`  Examples: ${sub.examples.join(', ')}`);
+  }
+  if (info) {
+    lines.push(`Info-Dumping: ${info.detected ? 'Detected' : 'Not detected'}`);
+    if (Array.isArray(info.issues) && info.issues.length) lines.push(`  Issues: ${info.issues.join(', ')}`);
+  }
+  if (result.overallNotes) lines.push(`\n${result.overallNotes}`);
+  return lines.join('\n');
+}
 
 export function AIToolbar({ editor }: AIToolbarProps) {
   const { currentProject } = useStore();
@@ -190,7 +223,27 @@ export function AIToolbar({ editor }: AIToolbarProps) {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const data: APIResponse = await response.json();
+      const raw: RawAPIResponse = await response.json();
+
+      // Transform API response into our expected shape
+      let data: APIResponse;
+      if (action === 'dialogue-coach') {
+        // Dialogue coach returns structured feedback or a string
+        const feedbackText = typeof raw.result === 'string'
+          ? raw.result
+          : (raw.result as Record<string, unknown>).overallNotes
+            ? formatDialogueFeedback(raw.result as Record<string, unknown>)
+            : JSON.stringify(raw.result, null, 2);
+        data = { feedback: feedbackText, action: 'dialogue-coach' };
+      } else {
+        // All other actions return replacement text
+        data = {
+          originalText: selectedText,
+          suggestedText: typeof raw.result === 'string' ? raw.result : String(raw.result),
+          action,
+        };
+      }
+
       setResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
@@ -247,6 +300,7 @@ export function AIToolbar({ editor }: AIToolbarProps) {
     return (
       <div
         ref={toolbarRef}
+        onMouseDown={(e) => e.preventDefault()}
         className="fixed z-50 bg-slate-800 rounded-lg shadow-lg p-4 flex items-center gap-3"
         style={{
           top: `${position.top}px`,
@@ -267,6 +321,7 @@ export function AIToolbar({ editor }: AIToolbarProps) {
       return (
         <div
           ref={toolbarRef}
+          onMouseDown={(e) => e.preventDefault()}
           className="fixed z-50 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden"
           style={{
             top: `${position.top + 40}px`,
@@ -321,6 +376,7 @@ export function AIToolbar({ editor }: AIToolbarProps) {
       return (
         <div
           ref={toolbarRef}
+          onMouseDown={(e) => e.preventDefault()}
           className="fixed z-50 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden"
           style={{
             top: `${position.top + 40}px`,
@@ -369,6 +425,13 @@ export function AIToolbar({ editor }: AIToolbarProps) {
     );
   }
 
+  // Prevent focus theft from ProseMirror when clicking toolbar buttons
+  // Without this, clicking a button collapses the editor selection,
+  // fires selectionUpdate with from===to, clears selectedText, and the API call silently returns
+  const preventFocusLoss = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
+
   // Normal toolbar state
   const toneOptions: { label: string; value: ToneOption }[] = [
     { label: 'Formal', value: 'formal' },
@@ -382,7 +445,7 @@ export function AIToolbar({ editor }: AIToolbarProps) {
     {
       icon: Sparkles,
       label: 'Improve Prose',
-      action: 'improve-prose' as AIAction,
+      action: 'improve' as AIAction,
     },
     { icon: Eye, label: 'Show Don\'t Tell', action: 'show-dont-tell' as AIAction },
     { icon: Scissors, label: 'Tighten', action: 'tighten' as AIAction },
@@ -399,6 +462,7 @@ export function AIToolbar({ editor }: AIToolbarProps) {
   return (
     <div
       ref={toolbarRef}
+      onMouseDown={preventFocusLoss}
       className="fixed z-50 bg-slate-800 rounded-lg shadow-lg p-2 flex items-center gap-1"
       style={{
         top: `${position.top}px`,

@@ -298,6 +298,7 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
     updateChapter,
     updateScene,
     deleteChapter,
+    deleteScene,
     reorderChapters,
     chapterWordCount,
   } = useStore();
@@ -383,6 +384,21 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
     deleteChapter(chapterId);
   };
 
+  const handleRenameScene = (sceneId: string) => {
+    // Find the scene across all chapters
+    for (const { scenes } of chaptersWithScenes) {
+      const scene = scenes.find((s) => s.id === sceneId);
+      if (scene) {
+        setRenamingId(sceneId);
+        setRenameValue(scene.title || '');
+        break;
+      }
+    }
+  };
+
+  const handleDeleteScene = (sceneId: string) => {
+    deleteScene(sceneId);
+  };
 
   const handleShowMenu = (key: string) => {
     setMenuOpen((prev) => ({
@@ -475,6 +491,20 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
                     onDelete={() => handleDeleteChapter(chapter.id)}
                     type="chapter"
                   />
+                )}
+
+                {/* Scene context menus */}
+                {scenes.map((scene) =>
+                  menuOpen[`scene-${scene.id}`] ? (
+                    <ContextMenu
+                      key={`menu-${scene.id}`}
+                      isOpen={true}
+                      onClose={() => handleShowMenu(`scene-${scene.id}`)}
+                      onRename={() => handleRenameScene(scene.id)}
+                      onDelete={() => handleDeleteScene(scene.id)}
+                      type="scene"
+                    />
+                  ) : null
                 )}
 
                 {/* Rename input for chapter */}
