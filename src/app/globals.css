@@ -194,3 +194,13 @@ body {
   background-color: var(--color-accent);
   color: var(--color-surface);
 }
+
+/* Selection focus mode — dims non-selected text when beta reader selection is active */
+.selection-focus-mode .tiptap {
+  color: var(--color-text-muted);
+  transition: color 0.3s ease;
+}
+.selection-focus-mode .tiptap ::selection {
+  background-color: var(--color-accent);
+  color: var(--color-surface);
+}

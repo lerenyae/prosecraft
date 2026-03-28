@@ -1,12 +1,16 @@
 'use client';
 
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import {
   TrendingUp,
   Clock,
   Target,
   BookOpen,
   Type,
+  SpellCheck,
+  Loader2,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -66,6 +70,12 @@ export default function InsightsPanel() {
   } = useStore();
 
   const [sessionStartWords, setSessionStartWords] = useState<number | null>(null);
+  const [grammarEnabled, setGrammarEnabled] = useState(false);
+  const [grammarLoading, setGrammarLoading] = useState(false);
+  const [grammarResult, setGrammarResult] = useState<{
+    grammar: { score: number; label: string; issues: string[]; note: string };
+    language: { score: number; label: string; qualities: string[]; note: string };
+  } | null>(null);
 
   // Track session start word count
   useEffect(() => {
@@ -88,6 +98,33 @@ export default function InsightsPanel() {
     });
     return texts.join(' ');
   }, [currentProject, projectChapters, chapterScenes]);
+
+  const runGrammarCheck = useCallback(async () => {
+    if (!currentProject || !allText || allText.length < 50) return;
+    setGrammarLoading(true);
+    try {
+      const scenes: string[] = [];
+      projectChapters.forEach(ch => {
+        const s = chapterScenes(ch.id);
+        s.forEach(sc => { if (sc.content) scenes.push(sc.content); });
+      });
+      const content = scenes.join('\n\n');
+
+      const res = await fetch('/api/ai/grammar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, genre: currentProject.genre }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setGrammarResult(data);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setGrammarLoading(false);
+    }
+  }, [currentProject, allText, projectChapters, chapterScenes]);
 
   const topWords = useMemo(() => getTopWords(allText, 8), [allText]);
   const overused = useMemo(() => getOverusedWords(allText), [allText]);
@@ -275,6 +312,109 @@ export default function InsightsPanel() {
           </div>
         </div>
       )}
+
+      {/* Grammar & Language Score */}
+      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <SpellCheck size={14} className="text-[var(--color-accent)]" />
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Grammar & Language</p>
+          </div>
+          <button
+            onClick={() => {
+              setGrammarEnabled(!grammarEnabled);
+              if (!grammarEnabled && !grammarResult) runGrammarCheck();
+            }}
+            className="text-[var(--color-text-muted)] hover:text-[var(--color-accent)] transition-colors"
+            title={grammarEnabled ? 'Disable grammar check' : 'Enable grammar check'}
+          >
+            {grammarEnabled ? <ToggleRight size={20} className="text-[var(--color-accent)]" /> : <ToggleLeft size={20} />}
+          </button>
+        </div>
+
+        {grammarEnabled && grammarLoading && (
+          <div className="flex items-center gap-2 py-3">
+            <Loader2 size={14} className="animate-spin text-[var(--color-accent)]" />
+            <span className="text-xs text-[var(--color-text-muted)]">Analyzing...</span>
+          </div>
+        )}
+
+        {grammarEnabled && grammarResult && !grammarLoading && (
+          <div className="flex flex-col gap-3">
+            {/* Grammar Score */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-[var(--color-text-secondary)]">Grammar</span>
+                <span className={`text-xs font-semibold ${
+                  grammarResult.grammar.score >= 85 ? 'text-emerald-500' :
+                  grammarResult.grammar.score >= 70 ? 'text-[var(--color-accent)]' :
+                  'text-amber-500'
+                }`}>{grammarResult.grammar.score}/100</span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    grammarResult.grammar.score >= 85 ? 'bg-emerald-500' :
+                    grammarResult.grammar.score >= 70 ? 'bg-[var(--color-accent)]' :
+                    'bg-amber-500'
+                  }`}
+                  style={{ width: `${grammarResult.grammar.score}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.grammar.note}</p>
+              {grammarResult.grammar.issues.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {grammarResult.grammar.issues.slice(0, 3).map((issue, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">{issue}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Language Score */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-[var(--color-text-secondary)]">Language</span>
+                <span className={`text-xs font-semibold ${
+                  grammarResult.language.score >= 85 ? 'text-emerald-500' :
+                  grammarResult.language.score >= 70 ? 'text-[var(--color-accent)]' :
+                  'text-amber-500'
+                }`}>{grammarResult.language.score}/100</span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    grammarResult.language.score >= 85 ? 'bg-emerald-500' :
+                    grammarResult.language.score >= 70 ? 'bg-[var(--color-accent)]' :
+                    'bg-amber-500'
+                  }`}
+                  style={{ width: `${grammarResult.language.score}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.language.note}</p>
+              {grammarResult.language.qualities.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {grammarResult.language.qualities.slice(0, 3).map((q, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15">{q}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Re-run button */}
+            <button
+              onClick={runGrammarCheck}
+              className="text-[10px] text-[var(--color-accent)] hover:underline self-end"
+            >
+              Re-analyze
+            </button>
+          </div>
+        )}
+
+        {grammarEnabled && !grammarResult && !grammarLoading && projectWordCount < 50 && (
+          <p className="text-xs text-[var(--color-text-muted)]">Write at least 50 words to get a score.</p>
+        )}
+      </div>
 
       {/* Overused Words Warning */}
       {overused.length > 0 && (

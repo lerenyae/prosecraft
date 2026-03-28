@@ -10,7 +10,7 @@ import {
   BookOpen,
   FileText,
   Folder,
-  Link as LinkIcon,
+  Download,
 } from 'lucide-react';
 import {
   DndContext,
@@ -26,7 +26,9 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  useSortable,
 } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useStore } from '@/lib/store';
 import { Chapter, Scene } from '@/types';
 
@@ -69,8 +71,6 @@ function SortableChapterItem({
   currentSceneId: string | null;
   chapterWordCount: (chapterId: string) => number;
 }) {
-  const { useSortable } = require('@dnd-kit/sortable');
-  const { CSS } = require('@dnd-kit/utilities');
   const sortable = useSortable({ id: chapter.id });
   const { isDragging } = sortable;
 
@@ -85,7 +85,7 @@ function SortableChapterItem({
       className="space-y-0"
     >
       <div
-        className="flex items-center gap-1 px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800 rounded group"
+        className="flex items-center gap-1 px-3 py-2 text-sm hover:bg-[var(--color-surface)] rounded group"
         onContextMenu={(e) => {
           e.preventDefault();
           onShowMenu(`chapter-${chapter.id}`);
@@ -98,38 +98,38 @@ function SortableChapterItem({
           className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 -ml-1"
           title="Drag to reorder"
         >
-          <GripVertical size={14} className="text-slate-400" />
+          <GripVertical size={14} className="text-[var(--color-text-muted)]" />
         </button>
 
         {/* Expand toggle */}
         <button
           onClick={() => onToggleExpand(chapter.id)}
-          className="p-1 -ml-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+          className="p-1 -ml-1 hover:bg-[var(--color-surface-alt)] rounded"
         >
           {isExpanded ? (
-            <ChevronDown size={16} className="text-slate-600 dark:text-slate-300" />
+            <ChevronDown size={16} className="text-[var(--color-text-secondary)]" />
           ) : (
-            <ChevronRight size={16} className="text-slate-600 dark:text-slate-300" />
+            <ChevronRight size={16} className="text-[var(--color-text-secondary)]" />
           )}
         </button>
 
         {/* Folder icon */}
-        <Folder size={16} className="text-slate-500 dark:text-slate-400 flex-shrink-0" />
+        <Folder size={16} className="text-[var(--color-text-secondary)] flex-shrink-0" />
 
         {/* Chapter title and word count */}
-        <span className="flex-1 font-medium text-slate-900 dark:text-slate-100 truncate">
+        <span className="flex-1 font-medium text-[var(--color-text-primary)] truncate">
           {chapter.title}
         </span>
-        <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
+        <span className="text-xs text-[var(--color-text-muted)] flex-shrink-0">
           {chapterWordCount(chapter.id)} words
         </span>
 
         {/* Menu button */}
         <button
           onClick={() => onShowMenu(`chapter-${chapter.id}`)}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--color-surface-alt)] rounded"
         >
-          <MoreHorizontal size={14} className="text-slate-400" />
+          <MoreHorizontal size={14} className="text-[var(--color-text-muted)]" />
         </button>
       </div>
 
@@ -149,7 +149,7 @@ function SortableChapterItem({
           {/* Add scene button */}
           <button
             onClick={() => onAddScene(chapter.id)}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] rounded transition-colors"
           >
             <Plus size={14} />
             Add Scene
@@ -175,8 +175,17 @@ function SceneItem({
   onSelect: () => void;
   onShowMenu: (key: string) => void;
 }) {
+  const sortable = useSortable({ id: scene.id });
+  const { isDragging } = sortable;
+
   return (
     <button
+      ref={sortable.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
       onClick={onSelect}
       onContextMenu={(e) => {
         e.preventDefault();
@@ -184,19 +193,30 @@ function SceneItem({
       }}
       className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded transition-colors group ${
         isActive
-          ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 font-medium'
-          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          ? 'bg-[var(--color-accent-light)] text-[var(--color-accent-dark)] font-medium'
+          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]'
       }`}
     >
+      {/* Drag handle */}
+      <button
+        {...sortable.listeners}
+        {...sortable.attributes}
+        className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 -ml-1"
+        title="Drag to reorder"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical size={12} className="text-[var(--color-text-muted)]" />
+      </button>
+
       <FileText
         size={14}
-        className={isActive ? 'text-blue-600 dark:text-blue-300' : 'text-slate-400'}
+        className={isActive ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'}
         aria-hidden
       />
       <span className="flex-1 truncate text-left">
         {scene.title || 'Untitled Scene'}
       </span>
-      <span className={`text-xs flex-shrink-0 ${isActive ? 'font-medium' : 'text-slate-500 dark:text-slate-400'}`}>
+      <span className={`text-xs flex-shrink-0 ${isActive ? 'font-medium' : 'text-[var(--color-text-muted)]'}`}>
         {scene.wordCount} words
       </span>
 
@@ -206,10 +226,10 @@ function SceneItem({
           e.stopPropagation();
           onShowMenu(`scene-${scene.id}`);
         }}
-        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-[var(--color-surface-alt)] rounded"
         title="Scene menu"
       >
-        <MoreHorizontal size={14} className="text-slate-400" />
+        <MoreHorizontal size={14} className="text-[var(--color-text-muted)]" />
       </button>
     </button>
   );
@@ -235,13 +255,13 @@ function ContextMenu({
   if (!isOpen) return null;
 
   return (
-    <div className="absolute right-0 mt-1 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded shadow-lg z-50 min-w-[120px]">
+    <div className="absolute right-0 mt-1 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded shadow-lg z-50 min-w-[120px]">
       <button
         onClick={() => {
           onRename();
           onClose();
         }}
-        className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
+        className="w-full text-left px-4 py-2 text-sm text-[var(--color-text-primary)] hover:bg-[var(--color-surface)]"
       >
         Rename
       </button>
@@ -250,7 +270,7 @@ function ContextMenu({
           onDelete();
           onClose();
         }}
-        className="w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50/50"
       >
         Delete
       </button>
@@ -262,7 +282,7 @@ function ContextMenu({
 // Main Sidebar Component
 // ============================================================================
 
-export default function Sidebar() {
+export default function Sidebar({ onExport }: { onExport?: () => void }) {
   const {
     currentProject,
     currentChapterId,
@@ -279,7 +299,6 @@ export default function Sidebar() {
     updateScene,
     deleteChapter,
     reorderChapters,
-    projectWordCount,
     chapterWordCount,
   } = useStore();
 
@@ -400,23 +419,23 @@ export default function Sidebar() {
   // Don't render if no project is selected
   if (!currentProject) {
     return (
-      <div className="w-[260px] bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 p-4 text-center text-slate-500 dark:text-slate-400">
+      <div className="w-[260px] bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)] p-4 text-center text-[var(--color-text-muted)]">
         <p className="text-sm">No project selected</p>
       </div>
     );
   }
 
   return (
-    <aside className="w-[260px] h-screen bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden transition-all duration-200">
+    <aside className="w-[260px] h-screen bg-[var(--color-bg-secondary)] border-r border-[var(--color-border)] flex flex-col overflow-hidden transition-all duration-200">
       {/* Project header */}
-      <div className="flex-shrink-0 p-4 border-b border-slate-200 dark:border-slate-700">
+      <div className="flex-shrink-0 p-4 border-b border-[var(--color-border)]">
         <div className="flex items-center gap-2 mb-2">
-          <BookOpen size={16} className="text-slate-600 dark:text-slate-300" />
-          <h2 className="font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">
+          <BookOpen size={16} className="text-[var(--color-text-secondary)]" />
+          <h2 className="font-semibold text-[var(--color-text-primary)] truncate flex-1">
             {currentProject.title}
           </h2>
         </div>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-[var(--color-text-muted)]">
           {projectChapters.length} chapters
         </p>
       </div>
@@ -461,8 +480,8 @@ export default function Sidebar() {
                 {/* Rename input for chapter */}
                 {renamingId === chapter.id && (
                   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white dark:bg-slate-800 rounded shadow-lg p-4 max-w-sm">
-                      <h3 className="font-semibold mb-3 text-slate-900 dark:text-slate-100">
+                    <div className="bg-[var(--color-bg-primary)] rounded shadow-lg p-4 max-w-sm">
+                      <h3 className="font-semibold mb-3 text-[var(--color-text-primary)]">
                         Rename Chapter
                       </h3>
                       <input
@@ -474,18 +493,18 @@ export default function Sidebar() {
                           if (e.key === 'Escape') setRenamingId(null);
                         }}
                         autoFocus
-                        className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded mb-3 dark:bg-slate-700 dark:text-slate-100"
+                        className="w-full px-3 py-2 border border-[var(--color-border)] rounded mb-3 bg-[var(--color-surface)] text-[var(--color-text-primary)]"
                       />
                       <div className="flex gap-2">
                         <button
                           onClick={handleConfirmRename}
-                          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                          className="px-4 py-2 bg-[var(--color-accent)] text-white rounded hover:bg-[var(--color-accent-dark)] text-sm"
                         >
                           Save
                         </button>
                         <button
                           onClick={() => setRenamingId(null)}
-                          className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded hover:bg-slate-300 dark:hover:bg-slate-600 text-sm"
+                          className="px-4 py-2 bg-[var(--color-surface-alt)] text-[var(--color-text-primary)] rounded hover:bg-[var(--color-border)] text-sm"
                         >
                           Cancel
                         </button>
@@ -501,8 +520,8 @@ export default function Sidebar() {
         {/* Rename input for scene */}
         {renamingId && !projectChapters.some((c) => c.id === renamingId) && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-slate-800 rounded shadow-lg p-4 max-w-sm">
-              <h3 className="font-semibold mb-3 text-slate-900 dark:text-slate-100">
+            <div className="bg-[var(--color-bg-primary)] rounded shadow-lg p-4 max-w-sm">
+              <h3 className="font-semibold mb-3 text-[var(--color-text-primary)]">
                 Rename Scene
               </h3>
               <input
@@ -514,18 +533,18 @@ export default function Sidebar() {
                   if (e.key === 'Escape') setRenamingId(null);
                 }}
                 autoFocus
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded mb-3 dark:bg-slate-700 dark:text-slate-100"
+                className="w-full px-3 py-2 border border-[var(--color-border)] rounded mb-3 bg-[var(--color-surface)] text-[var(--color-text-primary)]"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleConfirmRename}
-                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                  className="px-4 py-2 bg-[var(--color-accent)] text-white rounded hover:bg-[var(--color-accent-dark)] text-sm"
                 >
                   Save
                 </button>
                 <button
                   onClick={() => setRenamingId(null)}
-                  className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded hover:bg-slate-300 dark:hover:bg-slate-600 text-sm"
+                  className="px-4 py-2 bg-[var(--color-surface-alt)] text-[var(--color-text-primary)] rounded hover:bg-[var(--color-border)] text-sm"
                 >
                   Cancel
                 </button>
@@ -535,29 +554,25 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Add chapter button */}
-      <div className="flex-shrink-0 px-2 py-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+      {/* Bottom actions */}
+      <div className="flex-shrink-0 px-2 py-2 border-t border-[var(--color-border)] space-y-2">
         <button
           onClick={handleAddChapter}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm font-medium"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-dark)] text-white rounded transition-colors text-sm font-medium"
         >
           <Plus size={16} />
           Add Chapter
         </button>
 
-        {/* Project stats and back button */}
-        <div className="text-xs text-slate-600 dark:text-slate-400 space-y-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-          <div>
-            <span className="font-medium">{projectWordCount}</span> words
-          </div>
-          <a
-            href="/"
-            className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            <LinkIcon size={12} />
-            Back to Dashboard
-          </a>
-        </div>
+        {/* Export button */}
+        <button
+          onClick={onExport}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-alt)] text-[var(--color-text-primary)] rounded transition-colors text-sm"
+          title="Export project"
+        >
+          <Download size={16} />
+          Export
+        </button>
       </div>
     </aside>
   );

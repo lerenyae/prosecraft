@@ -154,9 +154,10 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
 
 interface EditorProps {
   onSelectionChange?: (text: string) => void;
+  hasActiveSelection?: boolean;
 }
 
-export function Editor({ onSelectionChange }: EditorProps) {
+export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
   const {
     currentScene,
     updateScene,
@@ -165,6 +166,7 @@ export function Editor({ onSelectionChange }: EditorProps) {
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const selectionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wordCountTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -204,8 +206,18 @@ export function Editor({ onSelectionChange }: EditorProps) {
       },
     },
     onUpdate: ({ editor }) => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      // Immediate word count update (200ms) for responsive feel
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+      wordCountTimerRef.current = setTimeout(() => {
+        if (currentScene) {
+          const text = editor.getText();
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          updateScene(currentScene.id, { wordCount });
+        }
+      }, 200);
 
+      // Debounced full content save (2s)
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         if (currentScene) {
           const html = editor.getHTML();
@@ -249,11 +261,12 @@ export function Editor({ onSelectionChange }: EditorProps) {
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
     };
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-[var(--color-surface)]">
+    <div className={`flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'selection-focus-mode' : ''}`}>
       <Toolbar editor={editor} isHidden={focusMode} />
 
       <div className="flex-1 overflow-y-auto">

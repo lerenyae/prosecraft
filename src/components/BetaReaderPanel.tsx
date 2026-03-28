@@ -360,9 +360,21 @@ function AnnotationCard({
 
   const handleCopy = (e: React.MouseEvent, text: string) => {
     e.stopPropagation();
+    // Save current selection before clipboard write clears it
+    const sel = window.getSelection();
+    const savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
+
+      // Restore selection so the writer knows where to paste
+      if (savedRange && sel) {
+        requestAnimationFrame(() => {
+          sel.removeAllRanges();
+          sel.addRange(savedRange);
+        });
+      }
     });
   };
 

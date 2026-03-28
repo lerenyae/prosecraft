@@ -11,6 +11,7 @@ import {
   Settings,
   BookOpen,
   PenTool,
+  Download,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
@@ -265,6 +266,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     focusMode,
     projectWordCount,
     projectChapters,
+    chapterScenes,
   } = useStore();
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
@@ -292,6 +294,43 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       updateProject(currentProject.id, updates as any);
     }
   }, [currentProject, updateProject]);
+
+  const handleExport = useCallback(async () => {
+    if (!currentProject) return;
+
+    // Build full manuscript text
+    let manuscript = `${currentProject.title}\n\n`;
+    projectChapters.forEach((chapter) => {
+      manuscript += `\n\n${chapter.title}\n\n`;
+      const scenes = chapterScenes(chapter.id);
+      scenes.forEach((scene) => {
+        const text = scene.content
+          .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
+          .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .replace(/\n{3,}/g, '\n\n');
+        manuscript += text;
+      });
+    });
+
+    // Download as .txt
+    const blob = new Blob([manuscript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [currentProject, projectChapters, chapterScenes]);
 
   if (!currentProject) {
     return (
@@ -377,6 +416,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </span>
               </button>
 
+              {/* Export */}
+              <button
+                onClick={handleExport}
+                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
+                title="Export manuscript"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+
               {/* Goal Settings */}
               <button
                 onClick={() => setShowGoalSettings(true)}
@@ -423,7 +471,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
         {/* Editor */}
         <div className="flex-1 overflow-hidden">
-          <Editor onSelectionChange={handleSelectionChange} />
+          <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} />
         </div>
 
         {/* Right Panel */}
