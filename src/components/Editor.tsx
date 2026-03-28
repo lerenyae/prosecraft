@@ -170,13 +170,16 @@ export function Editor({ onSelectionChange }: EditorProps) {
     extensions: [
       StarterKit.configure({
         paragraph: {
-          HTMLAttributes: { class: 'leading-relaxed' },
+          HTMLAttributes: { class: 'prose-paragraph' },
         },
         heading: {
-          HTMLAttributes: { class: 'font-serif font-bold leading-snug mt-6 mb-3' },
+          HTMLAttributes: { class: 'prose-heading' },
         },
         hardBreak: {
           HTMLAttributes: { class: 'break' },
+        },
+        blockquote: {
+          HTMLAttributes: { class: 'prose-blockquote' },
         },
       }),
       Placeholder.configure({
@@ -197,7 +200,7 @@ export function Editor({ onSelectionChange }: EditorProps) {
     content: currentScene?.content || '',
     editorProps: {
       attributes: {
-        class: 'font-serif text-base leading-relaxed focus:outline-none max-w-none min-h-full',
+        class: 'prose-editor focus:outline-none max-w-none min-h-full',
       },
     },
     onUpdate: ({ editor }) => {

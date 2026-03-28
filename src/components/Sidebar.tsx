@@ -93,7 +93,8 @@ function SortableChapterItem({
       >
         {/* Drag handle */}
         <button
-          {...sortable.attributes.listeners}
+          {...sortable.listeners}
+          {...sortable.attributes}
           className="opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 -ml-1"
           title="Drag to reorder"
         >
