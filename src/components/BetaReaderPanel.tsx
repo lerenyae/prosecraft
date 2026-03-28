@@ -205,9 +205,11 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
         </div>
       )}
 
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto">
       {/* Selection Result */}
       {selectionResult && (
-        <div className="flex-shrink-0 p-3 border-b border-[var(--color-border)] bg-blue-500/5">
+        <div className="p-3 border-b border-[var(--color-border)] bg-blue-500/5">
           <p className="text-xs font-medium text-[var(--color-text-primary)] mb-2">Selection Feedback</p>
           <p className="text-xs text-[var(--color-text-secondary)] mb-3 leading-relaxed">
             {selectionResult.summary.overall}
@@ -219,7 +221,7 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
       )}
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="p-4">
         {/* Empty State */}
         {!result && !isLoading && !error && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
@@ -338,6 +340,7 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
             </button>
           </div>
         )}
+      </div>
       </div>
     </div>
   );

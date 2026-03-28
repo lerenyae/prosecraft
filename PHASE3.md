@@ -21,6 +21,10 @@
 - **Multi-Format Import**: Support .docx, .rtf, .epub import in addition to .txt
 - **Multi-Format Export**: Export as .docx, .pdf, .epub with formatting preserved
 
+## Beta Reader & Feedback
+- **Adjustable Feedback Depth**: Let users choose feedback intensity (light touch, balanced, deep dive) to control how many annotations the Beta Reader returns
+- **Full Manuscript Breakdown Report**: Submit the entire manuscript for a comprehensive editorial report — structure, pacing, character arcs, prose quality — delivered as a downloadable document
+
 ## Analytics & Insights
 - **Pacing Analysis**: Visual graph of scene tension/word density across the manuscript
 - **Readability Scoring**: Flesch-Kincaid and other readability metrics per scene and project-wide
