@@ -97,11 +97,11 @@ const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 // Safe localStorage wrappers for SSR
 function safeGetItem(key: string): string | null {
   if (typeof window === 'undefined') return null;
-  try { return safeGetItem(key); } catch { return null; }
+  try { return localStorage.getItem(key); } catch { return null; }
 }
 function safeSetItem(key: string, value: string): void {
   if (typeof window === 'undefined') return;
-  try { safeSetItem(key, value); } catch { /* noop */ }
+  try { localStorage.setItem(key, value); } catch { /* noop */ }
 }
 
 const initialState: StoreState = {
