@@ -88,19 +88,65 @@ export default function Dashboard() {
     router.push(`/project/${newProject.id}`);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setImportFileName(file.name);
     if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
 
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const text = ev.target?.result as string;
-      setImportText(text);
-    };
-    reader.readAsText(file);
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (ext === 'docx') {
+      setIsProcessingFile(true);
+      try {
+        const mammoth = await import('mammoth');
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.default.extractRawText({ arrayBuffer });
+        setImportText(result.value);
+      } catch (err) {
+        console.error('Failed to parse .docx:', err);
+        setImportText('');
+        setImportFileName('Error reading file');
+      } finally {
+        setIsProcessingFile(false);
+      }
+    } else if (ext === 'pdf') {
+      setIsProcessingFile(true);
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, useWorkerFetch: false, isEvalSupported: false, useSystemFonts: true }).promise;
+        let fullText = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const pageText = content.items
+            .filter((item: any) => 'str' in item)
+            .map((item: any) => item.str)
+            .join(' ');
+          fullText += pageText + '\n\n';
+        }
+        setImportText(fullText.trim());
+      } catch (err) {
+        console.error('Failed to parse .pdf:', err);
+        setImportText('');
+        setImportFileName('Error reading file');
+      } finally {
+        setIsProcessingFile(false);
+      }
+    } else {
+      // Plain text (.txt, .md, .rtf)
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const text = ev.target?.result as string;
+        setImportText(text);
+      };
+      reader.readAsText(file);
+    }
   };
 
   const handleDeleteProject = (projectId: string, e: React.MouseEvent) => {
@@ -374,7 +420,7 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-2xl font-semibold mb-1">Import Manuscript</h2>
                 <p className="text-sm text-[var(--color-text-secondary)]">
-                  Import a .txt file or paste your manuscript text. Chapters are auto-detected.
+                  Import a .txt, .docx, or .pdf file, or paste your manuscript text. Chapters are auto-detected.
                 </p>
               </div>
 
@@ -411,7 +457,7 @@ export default function Dashboard() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".txt,.md,.rtf"
+                  accept=".txt,.md,.rtf,.docx,.pdf"
                   onChange={handleFileUpload}
                   className="hidden"
                 />
@@ -421,7 +467,7 @@ export default function Dashboard() {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--color-bg-secondary)] border-2 border-dashed border-[var(--color-border)] rounded-lg hover:border-[var(--color-accent-light)] transition-colors text-sm text-[var(--color-text-secondary)]"
                 >
                   <Upload size={16} />
-                  {importFileName || 'Choose a .txt file'}
+                  {isProcessingFile ? 'Processing file...' : importFileName || 'Choose a file (.txt, .docx, .pdf)'}
                 </button>
               </div>
 
