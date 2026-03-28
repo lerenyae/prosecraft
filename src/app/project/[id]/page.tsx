@@ -230,11 +230,13 @@ function RightPanel({
   selectedText,
   editor,
   onAnnotationClick,
+  onFilterWordClick,
 }: {
   activeTab: PanelTab | null;
   selectedText: string;
   editor: TipTapEditor | null;
   onAnnotationClick: (quote: string) => void;
+  onFilterWordClick?: (word: string) => void;
 }) {
   if (!activeTab) return null;
 
@@ -250,9 +252,9 @@ function RightPanel({
       </div>
 
       {/* Panel Content */}
-      <div className="flex-1 overflow-hidden overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {activeTab === 'ai-tools' && <AIToolbar editor={editor} selectedText={selectedText} />}
-        {activeTab === 'insights' && <InsightsPanel />}
+        {activeTab === 'insights' && <InsightsPanel onFilterWordClick={onFilterWordClick} />}
         {activeTab === 'beta-reader' && (
           <BetaReaderPanel
             selectedText={selectedText}
@@ -286,6 +288,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [selectedText, setSelectedText] = useState('');
   const [showGoalSettings, setShowGoalSettings] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [searchInitialTerm, setSearchInitialTerm] = useState('');
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [editorInstance, setEditorInstance] = useState<TipTapEditor | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
@@ -305,6 +308,11 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [showExportMenu]);
+
+  const handleFilterWordClick = useCallback((word: string) => {
+    setSearchInitialTerm(word);
+    setShowSearch(true);
+  }, []);
 
   // Keyboard shortcut: Cmd+F for search
   useEffect(() => {
@@ -632,7 +640,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
         {/* Editor */}
         <div className="flex-1 overflow-hidden relative">
-          <SearchReplace editor={editorInstance} isOpen={showSearch} onClose={() => setShowSearch(false)} />
+          <SearchReplace editor={editorInstance} isOpen={showSearch} onClose={() => { setShowSearch(false); setSearchInitialTerm(''); }} initialTerm={searchInitialTerm} />
           <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} onEditorReady={handleEditorReady} />
         </div>
 
@@ -644,6 +652,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               selectedText={selectedText}
               editor={editorInstance}
               onAnnotationClick={handleAnnotationClick}
+              onFilterWordClick={handleFilterWordClick}
             />
             <ToolStrip
               activeTab={activePanel}
