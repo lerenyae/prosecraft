@@ -10,6 +10,29 @@ interface SearchReplaceProps {
   onClose: () => void;
 }
 
+// Map flat text offset to ProseMirror position
+// ProseMirror positions count block boundaries, so flat getText() offsets don't map 1:1
+function textOffsetToPmPos(editor: TipTapEditor, textOffset: number): number {
+  let charsSeen = 0;
+  let pmPos = -1;
+
+  editor.state.doc.descendants((node, pos) => {
+    if (pmPos !== -1) return false; // already found
+    if (node.isText) {
+      const nodeText = node.text || '';
+      if (charsSeen + nodeText.length > textOffset) {
+        pmPos = pos + (textOffset - charsSeen);
+        return false;
+      }
+      charsSeen += nodeText.length;
+    }
+    return true;
+  });
+
+  // Fallback if not found (end of doc)
+  return pmPos !== -1 ? pmPos : editor.state.doc.content.size;
+}
+
 export default function SearchReplace({ editor, isOpen, onClose }: SearchReplaceProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [replaceTerm, setReplaceTerm] = useState('');
@@ -25,7 +48,7 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
     }
   }, [isOpen]);
 
-  // Find all matches
+  // Find all matches in flat text
   const findMatches = useCallback(() => {
     if (!editor || !searchTerm) {
       setMatches([]);
@@ -48,7 +71,6 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
     setMatches(found);
     setCurrentMatch(found.length > 0 ? 0 : -1);
 
-    // Highlight first match
     if (found.length > 0) {
       highlightMatch(found[0], searchTerm.length);
     }
@@ -60,15 +82,14 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
     return () => clearTimeout(timer);
   }, [searchTerm, findMatches]);
 
-  const highlightMatch = (textPos: number, length: number) => {
+  const highlightMatch = (textOffset: number, length: number) => {
     if (!editor) return;
-
-    // Simple approach: use the text offset directly with +1 for doc node
-    // TipTap getText returns flat text, positions offset by 1
     try {
-      const from = textPos + 1;
-      const to = from + length;
-      editor.chain().focus().setTextSelection({ from, to }).run();
+      const from = textOffsetToPmPos(editor, textOffset);
+      const to = textOffsetToPmPos(editor, textOffset + length);
+      if (from >= 0 && to >= from) {
+        editor.chain().focus().setTextSelection({ from, to }).run();
+      }
     } catch {
       // Silently fail for position issues
     }
@@ -91,11 +112,14 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
   const handleReplace = () => {
     if (!editor || currentMatch < 0 || matches.length === 0) return;
 
-    const pos = matches[currentMatch] + 1;
+    const textOffset = matches[currentMatch];
+    const from = textOffsetToPmPos(editor, textOffset);
+    const to = textOffsetToPmPos(editor, textOffset + searchTerm.length);
+
     editor
       .chain()
       .focus()
-      .setTextSelection({ from: pos, to: pos + searchTerm.length })
+      .setTextSelection({ from, to })
       .deleteSelection()
       .insertContent(replaceTerm)
       .run();
@@ -108,16 +132,17 @@ export default function SearchReplace({ editor, isOpen, onClose }: SearchReplace
     if (!editor || matches.length === 0) return;
 
     // Replace from end to start to maintain positions
-    const sortedMatches = [...matches].sort((a, b) => b - a);
-    const chain = editor.chain().focus();
+    const sortedOffsets = [...matches].sort((a, b) => b - a);
 
-    for (const pos of sortedMatches) {
-      const from = pos + 1;
-      const to = from + searchTerm.length;
-      chain.setTextSelection({ from, to }).deleteSelection().insertContent(replaceTerm);
+    // Use a single transaction for atomicity
+    const { tr } = editor.state;
+    for (const textOffset of sortedOffsets) {
+      const from = textOffsetToPmPos(editor, textOffset);
+      const to = textOffsetToPmPos(editor, textOffset + searchTerm.length);
+      tr.replaceWith(from, to, editor.state.schema.text(replaceTerm));
     }
+    editor.view.dispatch(tr);
 
-    chain.run();
     setTimeout(findMatches, 100);
   };
 

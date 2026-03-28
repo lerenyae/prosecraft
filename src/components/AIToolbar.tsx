@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Editor as TipTapEditor } from '@tiptap/react';
 import {
   Sparkles,
@@ -13,6 +13,7 @@ import {
   Loader2,
   Check,
   X,
+  ChevronDown,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -33,6 +34,7 @@ type ToneOption = 'formal' | 'casual' | 'dark' | 'lyrical' | 'humorous';
 
 interface AIToolbarProps {
   editor: TipTapEditor | null;
+  selectedText: string;
 }
 
 interface DiffResponse {
@@ -48,17 +50,15 @@ interface FeedbackResponse {
 
 type APIResponse = DiffResponse | FeedbackResponse;
 
-// The API returns { result, action } — we transform it into our expected shape
 interface RawAPIResponse {
   result: string | Record<string, unknown>;
   action: string;
 }
 
 // ============================================================================
-// Toolbar Component
+// Helpers
 // ============================================================================
 
-// Format structured dialogue coach feedback into readable text
 function formatDialogueFeedback(result: Record<string, unknown>): string {
   const lines: string[] = [];
   const vc = result.voiceConsistency as Record<string, unknown> | undefined;
@@ -85,150 +85,78 @@ function formatDialogueFeedback(result: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
-export function AIToolbar({ editor }: AIToolbarProps) {
+// ============================================================================
+// Action Buttons Config
+// ============================================================================
+
+const ACTION_BUTTONS: { icon: typeof Sparkles; label: string; action: AIAction; description: string }[] = [
+  { icon: Sparkles, label: 'Improve Prose', action: 'improve', description: 'Elevate the writing quality' },
+  { icon: Eye, label: 'Show Don\'t Tell', action: 'show-dont-tell', description: 'Convert telling to showing' },
+  { icon: Scissors, label: 'Tighten', action: 'tighten', description: 'Remove unnecessary words' },
+  { icon: Maximize2, label: 'Expand', action: 'expand', description: 'Add detail and depth' },
+  { icon: Palette, label: 'Change Tone', action: 'change-tone', description: 'Shift the emotional register' },
+  { icon: CheckCircle, label: 'Fix Grammar', action: 'fix-grammar', description: 'Correct grammar issues' },
+  { icon: MessageSquare, label: 'Dialogue Coach', action: 'dialogue-coach', description: 'Analyze dialogue quality' },
+];
+
+const TONE_OPTIONS: { label: string; value: ToneOption }[] = [
+  { label: 'Formal', value: 'formal' },
+  { label: 'Casual', value: 'casual' },
+  { label: 'Dark', value: 'dark' },
+  { label: 'Lyrical', value: 'lyrical' },
+  { label: 'Humorous', value: 'humorous' },
+];
+
+// ============================================================================
+// AI Panel Component (lives in right sidebar)
+// ============================================================================
+
+export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
   const { currentProject } = useStore();
 
-  const [isVisible, setIsVisible] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const [selectedText, setSelectedText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [response, setResponse] = useState<APIResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeToneMenu, setActiveToneMenu] = useState(false);
-  const [_selectedTone, setSelectedTone] = useState<ToneOption | null>(null);
+  const [showToneMenu, setShowToneMenu] = useState(false);
 
-  const toolbarRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<HTMLDivElement | null>(null);
-
-  // Get editor container reference
-  useEffect(() => {
-    if (editor) {
-      const editorElement = document.querySelector('.ProseMirror');
-      if (editorElement) {
-        editorRef.current = editorElement as HTMLDivElement;
-      }
-    }
-  }, [editor]);
-
-  // Handle selection updates
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleSelectionUpdate = () => {
-      const { from, to } = editor.state.selection;
-
-      if (from === to) {
-        // No selection, just cursor
-        setIsVisible(false);
-        setSelectedText('');
-        return;
-      }
-
-      const text = editor.state.doc.textBetween(from, to);
-
-      if (!text.trim()) {
-        // Selection is empty or whitespace only
-        setIsVisible(false);
-        setSelectedText('');
-        return;
-      }
-
-      setSelectedText(text);
-      setResponse(null);
-      setError(null);
-      setActiveToneMenu(false);
-
-      // Get position using TipTap's coordsAtPos
-      const coords = editor.view.coordsAtPos(to);
-
-      if (editorRef.current) {
-        const editorRect = editorRef.current.getBoundingClientRect();
-        const scrollParent = editorRef.current.parentElement;
-        const scrollOffset = scrollParent?.scrollTop || 0;
-
-        setPosition({
-          top: coords.top - editorRect.top + scrollOffset + 8,
-          left: coords.left - editorRect.left,
-        });
-      } else {
-        setPosition({
-          top: coords.top + 8,
-          left: coords.left,
-        });
-      }
-
-      setIsVisible(true);
-    };
-
-    editor.on('selectionUpdate', handleSelectionUpdate);
-
-    return () => {
-      editor.off('selectionUpdate', handleSelectionUpdate);
-    };
-  }, [editor]);
-
-  // Dismiss toolbar on click elsewhere
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
-        setIsVisible(false);
-      }
-    };
-
-    if (isVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isVisible]);
-
-  // Get surrounding context
-  const getContext = (text: string): string => {
+  // Get surrounding context from editor
+  const getContext = useCallback((): string => {
     if (!editor) return '';
-
     const { from, to } = editor.state.selection;
     const fullText = editor.state.doc.textContent;
-
     const contextBefore = Math.max(0, from - 500);
     const contextAfter = Math.min(fullText.length, to + 500);
-
-    const before = fullText.substring(contextBefore, from);
-    const after = fullText.substring(to, contextAfter);
-
-    return before + text + after;
-  };
+    return fullText.substring(contextBefore, from) + selectedText + fullText.substring(to, contextAfter);
+  }, [editor, selectedText]);
 
   // Call AI API
-  const callAIAPI = async (action: AIAction, toneTarget?: ToneOption) => {
-    if (!selectedText || !currentProject) return;
+  const callAIAPI = useCallback(async (action: AIAction, toneTarget?: ToneOption) => {
+    if (!selectedText || !currentProject || !editor) return;
 
     setIsLoading(true);
     setError(null);
+    setResponse(null);
+    setShowToneMenu(false);
 
     try {
-      const response = await fetch('/api/ai/inline', {
+      const res = await fetch('/api/ai/inline', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action,
           selectedText,
-          context: getContext(selectedText),
+          context: getContext(),
           genre: currentProject.genre,
           toneTarget,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
 
-      const raw: RawAPIResponse = await response.json();
+      const raw: RawAPIResponse = await res.json();
 
-      // Transform API response into our expected shape
       let data: APIResponse;
       if (action === 'dialogue-coach') {
-        // Dialogue coach returns structured feedback or a string
         const feedbackText = typeof raw.result === 'string'
           ? raw.result
           : (raw.result as Record<string, unknown>).overallNotes
@@ -236,7 +164,6 @@ export function AIToolbar({ editor }: AIToolbarProps) {
             : JSON.stringify(raw.result, null, 2);
         data = { feedback: feedbackText, action: 'dialogue-coach' };
       } else {
-        // All other actions return replacement text
         data = {
           originalText: selectedText,
           suggestedText: typeof raw.result === 'string' ? raw.result : String(raw.result),
@@ -247,276 +174,173 @@ export function AIToolbar({ editor }: AIToolbarProps) {
       setResponse(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      setTimeout(() => {
-        setError(null);
-        setIsVisible(false);
-      }, 3000);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [selectedText, currentProject, editor, getContext]);
 
-  // Handle action button clicks
-  const handleAction = (action: AIAction, tone?: ToneOption) => {
-    if (action === 'change-tone') {
-      if (!activeToneMenu) {
-        setActiveToneMenu(true);
-      } else if (tone) {
-        setSelectedTone(tone);
-        callAIAPI(action, tone);
-      }
-    } else {
-      callAIAPI(action);
-    }
-  };
-
-  // Accept suggestion
-  const handleAccept = () => {
+  // Accept suggestion — replace selected text in editor
+  const handleAccept = useCallback(() => {
     if (!editor || !response || !('suggestedText' in response)) return;
 
     const { from, to } = editor.state.selection;
-    editor
-      .chain()
-      .focus()
-      .deleteRange({ from, to })
-      .insertContent(response.suggestedText)
-      .run();
-
-    setIsVisible(false);
+    editor.chain().focus().deleteRange({ from, to }).insertContent(response.suggestedText).run();
     setResponse(null);
-  };
+  }, [editor, response]);
 
-  // Reject suggestion
-  const handleReject = () => {
-    setResponse(null);
-  };
+  const handleAction = useCallback((action: AIAction) => {
+    if (action === 'change-tone') {
+      setShowToneMenu(!showToneMenu);
+    } else {
+      callAIAPI(action);
+    }
+  }, [callAIAPI, showToneMenu]);
 
-  if (!isVisible || !editor) {
-    return null;
-  }
+  const hasSelection = selectedText.length > 5;
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div
-        ref={toolbarRef}
-        onMouseDown={(e) => e.preventDefault()}
-        className="fixed z-50 bg-slate-800 rounded-lg shadow-lg p-4 flex items-center gap-3"
-        style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-          transform: 'translateX(-50%)',
-        }}
-      >
-        <Loader2 className="animate-spin text-slate-200" size={20} />
-        <span className="text-sm text-slate-200">Processing...</span>
+  return (
+    <div className="flex flex-col h-full overflow-y-auto">
+      {/* Selection Preview */}
+      <div className="p-4 border-b border-[var(--color-border)]">
+        {hasSelection ? (
+          <div>
+            <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">Selected Text</p>
+            <div className="p-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] leading-relaxed max-h-24 overflow-y-auto">
+              {selectedText.length > 300 ? selectedText.slice(0, 300) + '...' : selectedText}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <Sparkles size={20} className="text-[var(--color-text-muted)] mx-auto mb-2" />
+            <p className="text-xs text-[var(--color-text-muted)]">
+              Highlight text in the editor to use AI tools
+            </p>
+          </div>
+        )}
       </div>
-    );
-  }
 
-  // Diff/Feedback view state
-  if (response) {
-    if ('suggestedText' in response) {
-      // Text diff view
-      return (
-        <div
-          ref={toolbarRef}
-          onMouseDown={(e) => e.preventDefault()}
-          className="fixed z-50 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden"
-          style={{
-            top: `${position.top + 40}px`,
-            left: `${position.left}px`,
-            transform: 'translateX(-50%)',
-            minWidth: '300px',
-            maxWidth: '500px',
-          }}
-        >
-          {/* Diff content */}
-          <div className="p-4 space-y-3">
-            <div className="space-y-1">
-              <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
-                Original
-              </p>
-              <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded text-sm text-slate-700 dark:text-slate-300 line-through">
+      {/* Action Buttons */}
+      <div className="p-3 flex flex-col gap-1">
+        {ACTION_BUTTONS.map((btn) => {
+          const Icon = btn.icon;
+          const isTone = btn.action === 'change-tone';
+
+          return (
+            <div key={btn.action}>
+              <button
+                onClick={() => handleAction(btn.action)}
+                disabled={!hasSelection || isLoading}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all ${
+                  hasSelection && !isLoading
+                    ? 'hover:bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+                    : 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <Icon size={15} className="flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium">{btn.label}</p>
+                  <p className="text-[10px] text-[var(--color-text-muted)] truncate">{btn.description}</p>
+                </div>
+                {isTone && hasSelection && <ChevronDown size={12} className={`flex-shrink-0 transition-transform ${showToneMenu ? 'rotate-180' : ''}`} />}
+              </button>
+
+              {/* Tone submenu */}
+              {isTone && showToneMenu && (
+                <div className="ml-8 mt-1 mb-1 flex flex-wrap gap-1.5">
+                  {TONE_OPTIONS.map((tone) => (
+                    <button
+                      key={tone.value}
+                      onClick={() => callAIAPI('change-tone', tone.value)}
+                      disabled={!hasSelection || isLoading}
+                      className="px-2.5 py-1 rounded-md text-[10px] font-medium bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:border-[var(--color-accent)] transition-colors"
+                    >
+                      {tone.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Loading State */}
+      {isLoading && (
+        <div className="px-4 py-6 flex items-center justify-center gap-2">
+          <Loader2 size={16} className="animate-spin text-[var(--color-accent)]" />
+          <span className="text-xs text-[var(--color-text-muted)]">Processing...</span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="mx-4 mb-3 p-3 rounded-lg bg-red-100 dark:bg-red-950/30 border border-red-300 dark:border-red-800">
+          <p className="text-xs text-red-800 dark:text-red-300">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="mt-1 text-[10px] text-red-600 dark:text-red-400 hover:underline"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Response: Diff View */}
+      {response && 'suggestedText' in response && (
+        <div className="mx-4 mb-3 rounded-lg border border-[var(--color-border)] overflow-hidden">
+          <div className="p-3 space-y-2.5">
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-1">Original</p>
+              <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded text-xs text-[var(--color-text-secondary)] line-through leading-relaxed">
                 {response.originalText}
               </div>
             </div>
-
-            <div className="space-y-1">
-              <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
-                Suggested
-              </p>
-              <div className="p-2 bg-green-50 dark:bg-green-950/30 rounded text-sm text-slate-700 dark:text-slate-300 font-semibold">
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-1">Suggested</p>
+              <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-xs text-[var(--color-text-primary)] font-medium leading-relaxed">
                 {response.suggestedText}
               </div>
             </div>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-2 px-4 pb-4">
+          <div className="flex gap-2 p-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
             <button
               onClick={handleAccept}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium transition-colors"
             >
-              <Check size={16} />
+              <Check size={14} />
               Accept
             </button>
             <button
-              onClick={handleReject}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-50 rounded text-sm font-medium transition-colors"
+              onClick={() => setResponse(null)}
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-secondary)] rounded-md text-xs font-medium transition-colors"
             >
-              <X size={16} />
+              <X size={14} />
               Reject
             </button>
           </div>
         </div>
-      );
-    } else {
-      // Feedback view for dialogue-coach
-      return (
-        <div
-          ref={toolbarRef}
-          onMouseDown={(e) => e.preventDefault()}
-          className="fixed z-50 bg-white dark:bg-slate-900 rounded-lg shadow-lg overflow-hidden"
-          style={{
-            top: `${position.top + 40}px`,
-            left: `${position.left}px`,
-            transform: 'translateX(-50%)',
-            minWidth: '300px',
-            maxWidth: '500px',
-          }}
-        >
-          <div className="p-4 space-y-3">
-            <p className="text-xs text-slate-600 dark:text-slate-400 font-semibold uppercase">
-              Dialogue Coach Feedback
-            </p>
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+      )}
+
+      {/* Response: Feedback View (Dialogue Coach) */}
+      {response && 'feedback' in response && (
+        <div className="mx-4 mb-3 rounded-lg border border-[var(--color-border)] overflow-hidden">
+          <div className="p-3">
+            <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-2">Dialogue Coach Feedback</p>
+            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 rounded text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
               {response.feedback}
             </div>
           </div>
-
-          <div className="flex px-4 pb-4">
+          <div className="p-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
             <button
               onClick={() => setResponse(null)}
-              className="flex-1 px-3 py-2 bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 dark:hover:bg-slate-600 text-slate-900 dark:text-slate-50 rounded text-sm font-medium transition-colors"
+              className="w-full px-3 py-2 bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-secondary)] rounded-md text-xs font-medium transition-colors"
             >
               Dismiss
             </button>
           </div>
         </div>
-      );
-    }
-  }
-
-  // Error state
-  if (error) {
-    return (
-      <div
-        ref={toolbarRef}
-        className="fixed z-50 bg-red-100 dark:bg-red-950/30 rounded-lg shadow-lg p-3"
-        style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
-          transform: 'translateX(-50%)',
-        }}
-      >
-        <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
-      </div>
-    );
-  }
-
-  // Prevent focus theft from ProseMirror when clicking toolbar buttons
-  // Without this, clicking a button collapses the editor selection,
-  // fires selectionUpdate with from===to, clears selectedText, and the API call silently returns
-  const preventFocusLoss = (e: React.MouseEvent) => {
-    e.preventDefault();
-  };
-
-  // Normal toolbar state
-  const toneOptions: { label: string; value: ToneOption }[] = [
-    { label: 'Formal', value: 'formal' },
-    { label: 'Casual', value: 'casual' },
-    { label: 'Dark', value: 'dark' },
-    { label: 'Lyrical', value: 'lyrical' },
-    { label: 'Humorous', value: 'humorous' },
-  ];
-
-  const actionButtons = [
-    {
-      icon: Sparkles,
-      label: 'Improve Prose',
-      action: 'improve' as AIAction,
-    },
-    { icon: Eye, label: 'Show Don\'t Tell', action: 'show-dont-tell' as AIAction },
-    { icon: Scissors, label: 'Tighten', action: 'tighten' as AIAction },
-    { icon: Maximize2, label: 'Expand', action: 'expand' as AIAction },
-    { icon: Palette, label: 'Change Tone', action: 'change-tone' as AIAction },
-    { icon: CheckCircle, label: 'Fix Grammar', action: 'fix-grammar' as AIAction },
-    {
-      icon: MessageSquare,
-      label: 'Dialogue Coach',
-      action: 'dialogue-coach' as AIAction,
-    },
-  ];
-
-  return (
-    <div
-      ref={toolbarRef}
-      onMouseDown={preventFocusLoss}
-      className="fixed z-50 bg-slate-800 rounded-lg shadow-lg p-2 flex items-center gap-1"
-      style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        transform: 'translateX(-50%)',
-      }}
-    >
-      {/* AI action buttons */}
-      {actionButtons.map((btn) => (
-        <div key={btn.action} className="relative">
-          <button
-            onClick={() => handleAction(btn.action)}
-            className="p-2 rounded hover:bg-slate-700 transition-colors text-slate-200 hover:text-slate-50 relative group"
-            title={btn.label}
-            type="button"
-          >
-            <btn.icon size={18} />
-
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-slate-50 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
-              {btn.label}
-            </div>
-          </button>
-
-          {/* Tone submenu */}
-          {btn.action === 'change-tone' && activeToneMenu && (
-            <div className="absolute top-full left-0 mt-2 bg-slate-900 rounded-lg shadow-xl border border-slate-700 p-1 z-50">
-              {toneOptions.map((tone) => (
-                <button
-                  key={tone.value}
-                  onClick={() => handleAction('change-tone', tone.value)}
-                  className="block w-full text-left px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 rounded transition-colors"
-                  type="button"
-                >
-                  {tone.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      ))}
-
-      {/* Close button */}
-      <button
-        onClick={() => {
-          setIsVisible(false);
-          setActiveToneMenu(false);
-        }}
-        className="p-2 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200 ml-1"
-        title="Close"
-        type="button"
-      >
-        <X size={18} />
-      </button>
+      )}
     </div>
   );
 }

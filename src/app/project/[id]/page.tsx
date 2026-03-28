@@ -17,19 +17,21 @@ import {
   FileText,
   FileType,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import InsightsPanel from '@/components/InsightsPanel';
 import BetaReaderPanel from '@/components/BetaReaderPanel';
+import AIToolbar from '@/components/AIToolbar';
 import SearchReplace from '@/components/SearchReplace';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type PanelTab = 'insights' | 'beta-reader';
+type PanelTab = 'insights' | 'beta-reader' | 'ai-tools';
 
 interface ProjectPageProps {
   params: Promise<{
@@ -182,6 +184,7 @@ function ToolStrip({
   onTabChange: (tab: PanelTab | null) => void;
 }) {
   const tools: { id: PanelTab; icon: typeof BarChart3; label: string }[] = [
+    { id: 'ai-tools', icon: Sparkles, label: 'AI Tools' },
     { id: 'insights', icon: BarChart3, label: 'Insights' },
     { id: 'beta-reader', icon: Brain, label: 'Beta Reader' },
   ];
@@ -225,25 +228,30 @@ function ToolStrip({
 function RightPanel({
   activeTab,
   selectedText,
+  editor,
   onAnnotationClick,
 }: {
   activeTab: PanelTab | null;
   selectedText: string;
+  editor: TipTapEditor | null;
   onAnnotationClick: (quote: string) => void;
 }) {
   if (!activeTab) return null;
+
+  const panelTitle = activeTab === 'insights' ? 'Insights' : activeTab === 'ai-tools' ? 'AI Tools' : 'Beta Reader';
 
   return (
     <div className="flex-shrink-0 w-[320px] border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col overflow-hidden">
       {/* Panel Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)] flex-shrink-0">
         <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-          {activeTab === 'insights' ? 'Insights' : 'Beta Reader'}
+          {panelTitle}
         </span>
       </div>
 
       {/* Panel Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-hidden overflow-y-auto">
+        {activeTab === 'ai-tools' && <AIToolbar editor={editor} selectedText={selectedText} />}
         {activeTab === 'insights' && <InsightsPanel />}
         {activeTab === 'beta-reader' && (
           <BetaReaderPanel
@@ -316,9 +324,9 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
   const handleSelectionChange = useCallback((text: string) => {
     setSelectedText(text);
-    // Auto-switch to beta reader when text is selected
-    if (text.length > 10 && activePanel !== 'beta-reader') {
-      setActivePanel('beta-reader');
+    // Auto-open AI tools panel when text is selected (only if no panel is open)
+    if (text.length > 10 && activePanel === null) {
+      setActivePanel('ai-tools');
     }
   }, [activePanel]);
 
@@ -634,6 +642,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <RightPanel
               activeTab={activePanel}
               selectedText={selectedText}
+              editor={editorInstance}
               onAnnotationClick={handleAnnotationClick}
             />
             <ToolStrip

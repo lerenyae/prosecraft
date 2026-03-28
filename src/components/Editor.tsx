@@ -27,7 +27,6 @@ import {
   Redo2,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import AIToolbar from '@/components/AIToolbar';
 
 const DEBOUNCE_MS = 2000;
 
@@ -285,9 +284,8 @@ export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }:
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8 relative">
+          <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8">
             <EditorContent editor={editor} />
-            <AIToolbar editor={editor} />
           </div>
         )}
       </div>
