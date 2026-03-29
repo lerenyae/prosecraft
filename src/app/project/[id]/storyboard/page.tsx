@@ -86,8 +86,7 @@ function CorkboardCard({
   onDelete: (id: string) => void;
   onLinkScene: (cardId: string, sceneId: string | undefined) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [showColorPicker, setShowColorPicker] = useState(false);
+    const [showColorPicker, setShowColorPicker] = useState(false);
   const [showScenePicker, setShowScenePicker] = useState(false);
   const colorConfig = CARD_COLORS.find(c => c.value === card.color) || CARD_COLORS[0];
   const linkedScene = card.sceneId ? scenes.find(s => s.id === card.sceneId) : null;
