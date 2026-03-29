@@ -12,7 +12,7 @@ import {
   ChevronRight,
   Search,
   X,
-  Sparkles,
+  Sparkles
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
@@ -20,9 +20,8 @@ import {
   CharacterRole,
   CharacterRelationship,
   RelationshipType,
-  GenreField,
   CHARACTER_ROLE_OPTIONS,
-  GENRE_SPECIFIC_FIELDS,
+  GENRE_SPECIFIC_FIELDS
 } from '@/types';
 
 // ============================================================================
@@ -52,7 +51,7 @@ const ROLE_COLORS: Record<string, string> = {
   'love-interest': 'bg-pink-500',
   sidekick: 'bg-green-500',
   supporting: 'bg-slate-500',
-  minor: 'bg-gray-400',
+  minor: 'bg-gray-400'
 };
 
 const RELATIONSHIP_TYPES: { value: RelationshipType; label: string; color: string }[] = [
@@ -92,7 +91,7 @@ function ProfileField({
   value,
   onChange,
   placeholder,
-  multiline = false,
+  multiline = false
 }: {
   label: string;
   value: string;
@@ -133,7 +132,7 @@ function ProfileField({
 function CharacterCard({
   character,
   isSelected,
-  onClick,
+  onClick
 }: {
   character: Character;
   isSelected: boolean;
@@ -175,7 +174,7 @@ function RelationshipEditor({
   currentCharacterId,
   onAdd,
   onRemove,
-  onUpdate,
+  onUpdate
 }: {
   relationships: CharacterRelationship[];
   characters: Character[];
@@ -206,7 +205,7 @@ function RelationshipEditor({
       projectId: characters[0]?.projectId || '',
       characterA: currentCharacterId,
       characterB: newTargetId,
-      type: newType,
+      type: newType
     });
     setNewTargetId('');
     setNewType('ally');
@@ -329,7 +328,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
           ...c,
           avatar: c.avatar || 'ð¤',
           role: c.role || 'supporting',
-          genreFields: c.genreFields || {},
+          genreFields: c.genreFields || {}
         }));
         setCharacters(migrated);
         safeSetItem(charKey, JSON.stringify(migrated));
@@ -360,7 +359,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
       name: '',
       role: 'supporting',
       avatar: 'ð¤',
-      genreFields: {},
+      genreFields: {}
     };
     const updated = [...characters, newChar];
     saveCharacters(updated);
