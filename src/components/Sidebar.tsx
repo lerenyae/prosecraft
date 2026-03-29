@@ -15,7 +15,9 @@ import {
   Map,
   Trash2,
   Edit3,
+  ExternalLink,
 } from 'lucide-react';
+import Link from 'next/link';
 import {
   DndContext,
   closestCenter,
@@ -671,8 +673,42 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
           </>
         )}
 
-        {activeSection === 'characters' && <CharactersPanel projectId={currentProject.id} />}
-        {activeSection === 'storyboard' && <StoryboardPanel projectId={currentProject.id} />}
+        {activeSection === 'characters' && (
+          <div className="p-4 space-y-4">
+            <div className="text-center py-6">
+              <Users size={32} className="mx-auto mb-3 text-[var(--color-text-muted)] opacity-50" />
+              <p className="text-xs text-[var(--color-text-muted)] mb-4">
+                Full character profiles with genre-specific fields, relationships, and arc tracking.
+              </p>
+              <Link
+                href={`/project/${currentProject.id}/characters`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent-dark)] text-white rounded-lg transition-colors text-xs font-medium"
+              >
+                <Users size={14} />
+                Open Characters
+                <ExternalLink size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
+        {activeSection === 'storyboard' && (
+          <div className="p-4 space-y-4">
+            <div className="text-center py-6">
+              <Map size={32} className="mx-auto mb-3 text-[var(--color-text-muted)] opacity-50" />
+              <p className="text-xs text-[var(--color-text-muted)] mb-4">
+                Visual corkboard and beat sheet templates (3-Act, Save the Cat, Hero&apos;s Journey).
+              </p>
+              <Link
+                href={`/project/${currentProject.id}/storyboard`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors text-xs font-medium"
+              >
+                <Map size={14} />
+                Open Storyboard
+                <ExternalLink size={12} />
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Bottom actions */}
