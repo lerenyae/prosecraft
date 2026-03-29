@@ -53,24 +53,6 @@ interface MenuOpen {
 type SidebarSection = 'chapters' | 'characters' | 'storyboard';
 
 // ============================================================================
-// Character & Storyboard types (stored in localStorage for now)
-// ============================================================================
-
-interface Character {
-  id: string;
-  name: string;
-  role: string;
-  notes: string;
-}
-
-interface StoryboardNote {
-  id: string;
-  title: string;
-  content: string;
-  color: string;
-}
-
-// ============================================================================
 // Sortable Chapter Item
 // ============================================================================
 
