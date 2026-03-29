@@ -278,7 +278,6 @@ function RenameModal({
 // Storyboard Panel
 // ============================================================================
 
-const NOTE_COLORS = ['bg-yellow-100 dark:bg-yellow-900/30', 'bg-blue-100 dark:bg-blue-900/30', 'bg-green-100 dark:bg-green-900/30', 'bg-pink-100 dark:bg-pink-900/30', 'bg-purple-100 dark:bg-purple-900/30'];
 // ============================================================================
 // Main Sidebar
 // ============================================================================
