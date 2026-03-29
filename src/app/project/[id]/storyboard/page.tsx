@@ -6,17 +6,14 @@ import { useStore } from '@/lib/store';
 import {
   ArrowLeft,
   Plus,
-  Trash2,
   LayoutGrid,
-  List,
   GripVertical,
   Link2,
   X,
-  ChevronDown,
   BookOpen,
   Sparkles,
   Check,
-  Palette,
+  Palette 
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
@@ -25,10 +22,9 @@ import {
   BeatType,
   PlotBeat,
   BeatSheetTemplate,
-  StoryboardViewMode,
   BEAT_SHEET_TEMPLATES,
   Scene,
-  Chapter,
+  Chapter 
 } from '@/types';
 
 // ============================================================================
@@ -62,13 +58,13 @@ const CARD_COLORS: { value: CardColor; bg: string; border: string; text: string;
 const ACT_COLORS: Record<number, string> = {
   1: 'border-l-blue-500',
   2: 'border-l-amber-500',
-  3: 'border-l-red-500',
+  3: 'border-l-red-500' 
 };
 
 const ACT_LABELS: Record<number, string> = {
   1: 'Act I â Setup',
   2: 'Act II â Confrontation',
-  3: 'Act III â Resolution',
+  3: 'Act III â Resolution' 
 };
 
 // ============================================================================
@@ -81,7 +77,7 @@ function CorkboardCard({
   chapters,
   onUpdate,
   onDelete,
-  onLinkScene,
+  onLinkScene 
 }: {
   card: StoryboardCard;
   scenes: Scene[];
@@ -221,7 +217,7 @@ function BeatSheetView({
   scenes,
   chapters,
   onUpdateBeat,
-  onLinkBeatScene,
+  onLinkBeatScene 
 }: {
   template: BeatSheetTemplate;
   beats: PlotBeat[];
@@ -242,7 +238,7 @@ function BeatSheetView({
           title: '',
           description: '',
           sortOrder: idx,
-          completed: false,
+          completed: false 
         };
         const linkedScene = beat.sceneId ? scenes.find(s => s.id === beat.sceneId) : null;
         const linkedChapter = linkedScene ? chapters.find(c => c.id === linkedScene.chapterId) : null;
@@ -369,7 +365,7 @@ export default function StoryboardPage({ params }: StoryboardPageProps) {
           ...c,
           sortOrder: c.sortOrder ?? i,
           createdAt: c.createdAt || new Date(),
-          updatedAt: c.updatedAt || new Date(),
+          updatedAt: c.updatedAt || new Date() 
         }));
         setCards(migrated);
         safeSetItem(cardsKey, JSON.stringify(migrated));
@@ -428,7 +424,7 @@ export default function StoryboardPage({ params }: StoryboardPageProps) {
       color: 'yellow',
       sortOrder: cards.length,
       createdAt: new Date(),
-      updatedAt: new Date(),
+      updatedAt: new Date() 
     };
     saveCards([...cards, newCard]);
   }, [cards, projectId, saveCards]);
