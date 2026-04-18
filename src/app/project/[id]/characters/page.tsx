@@ -433,7 +433,10 @@ export default function CharactersPage({ params }: CharacterPageProps) {
     }
   }, [aiPrompt, aiRole, aiLoading, project?.genre, characters, projectId, saveCharacters]);
 
-  // --- AI Expand Character ---
+  // --- Selected character ---
+  const selected = useMemo(() => characters.find(c => c.id === selectedId), [characters, selectedId]);
+
+    // --- AI Expand Character ---
   const aiExpandCharacter = useCallback(async () => {
     if (!selected || aiExpandLoading) return;
     setAIExpandLoading(true);
@@ -460,10 +463,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
     }
   }, [selected, aiExpandLoading, project?.genre, updateCharacter]);
 
-    // --- Selected character ---
-  const selected = useMemo(() => characters.find(c => c.id === selectedId), [characters, selectedId]);
-
-  // --- Genre fields ---
+    // --- Genre fields ---
   const genreFields = useMemo(() => {
     const genre = project?.genre || 'general';
     return GENRE_SPECIFIC_FIELDS[genre] || [];
