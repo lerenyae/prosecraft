@@ -150,42 +150,105 @@ export default function ChatPanel() {
             onClick={refreshContext}
             title="Re-read chapter (refreshes AI context)"
             className={`p-1.5 rounded-md transition-colors ${
-�۝^�Y��\�Y��	�^Y[Y\�[ML��Y[Y\�[ML�L	�	�^Vݘ\�KX��܋]^[]]Y
-WHݙ\��^Vݘ\�KX��܋]^\�X�ۙ\�JWHݙ\����Vݘ\�KX��܋\�\��X�KX[
-WIXB����Y��\����^�O^�L�H�\�Ә[YO^��۝^�Y��\�Y�	���	��Hς�؝]ۏ���Y\��Y�\˛[���	��
-��]ۂ�ې�X��^��X\��]B�]OH��X\��]\�ܞH���\�Ә[YOH�LK�H��[�Y[Y^Vݘ\�KX��܋]^[]]Y
-WHݙ\��^\�YMLݙ\����\�YML�L�[��][ۋX��ܜȂ����\���^�O^�L�Hς�؝]ۏ��
-_B��]����]�����ʈY\��Y�\�\�XH
-��B�]��\�Ә[YOH��^LHݙ\����^KX]]�L�KLȏ���Y\��Y�\˛[��OOH�
-�]��\�Ә[YOH��^�^X��][\�X�[�\��\�Y�KX�[�\�Y�[^X�[�\��\L�����\�Ә[YOH�^\�H^Vݘ\�KX��܋]^[]]Y
-WH��\��[�][��X��]\��\\�����]��\�Ә[YOH��^�^]ܘ\�\LK�H�\�Y�KX�[�\�X^]�V̍�H����	���	��HX�[�����	���[��[�H�[�[����	њ[��XZ�X[��YI��	��[H\��\\���K�X\
-�Y��\�[ۈO�
-��]ۂ��^O^��Y��\�[۟B�ې�X��^�
-HO���][�]
-�Y��\�[ۊN�_B��\�Ә[YOH�^V�LHL�KLH��[�Y[Y��Vݘ\�KX��܋\�\��X�JWH�ܙ\��ܙ\�Vݘ\�KX��܋X�ܙ\�WH^Vݘ\�KX��܋]^\�X�ۙ\�JWHݙ\����Vݘ\�KX��܋\�\��X�KX[
-WHݙ\���ܙ\�Vݘ\�KX��܋XX��[�
-WH�[��][ۋX��ܜȂ�����Y��\�[۟B�؝]ۏ��
-J_B��]����]���
-H�
-�]��\�Ә[YOH��^�^X���\Lȏ���Y\��Y�\˛X\
+              contextRefreshed
+                ? 'text-emerald-500 bg-emerald-500/10'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+            }`}
+          >
+            <RefreshCw size={13} className={contextRefreshed ? '' : ''} />
+          </button>
+          {messages.length > 0 && (
+            <button
+              onClick={clearChat}
+              title="Clear chat history"
+              className="p-1.5 rounded-md text-[var(--color-text-muted)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+      </div>
 
-\��JHO�
-�]���^O^�_B��\�Ә[YO^��^	�\�˜��HOOH	�\�\���	ڝ\�Y�KY[�	��	ڝ\�Y�K\�\�	�XB���]���\�Ә[YO^�X^]�V�L	WH��[�Y[�L�KL�^V�L�HXY[��\�[^Y	\�˜��HOOH	�\�\��	ؙ�Vݘ\�KX��܋XX��[�
-WH^]�]H��[�YX��\�I�	ؙ�Vݘ\�KX��܋\�\��X�JWH�ܙ\��ܙ\�Vݘ\�KX��܋X�ܙ\�WH^Vݘ\�KX��܋]^\�[X\�JWH��[�YX�\�IXB���]��\�Ә[YOH��]\�X�K\�K]ܘ\��XZ�]�ܙȏ��\�˘�۝[�O�]����]����]���
-J_B���Y[��	��
-�]��\�Ә[YOH��^�\�Y�K\�\����]��\�Ә[YOH���Vݘ\�KX��܋\�\��X�JWH�ܙ\��ܙ\�Vݘ\�KX��܋X�ܙ\�WH��[�Y[�L�KL���[�YX�\�H����Y\���^�O^�MH�\�Ә[YOH�[�[X]K\�[�^Vݘ\�KX��܋XX��[�
-WH�ς��]����]���
-_B�]��Y�^�Y\��Y�\�[��Y�Hς��]���
-_B��]�����ʈ[�]\�XH
-��B�]��\�Ә[YOH��^\��[��L�ܙ\�]�ܙ\�Vݘ\�KX��܋X�ܙ\�WHL����]��\�Ә[YOH��^][\�Y[��\LK�H��Vݘ\�KX��܋\�\��X�JWH�ܙ\��ܙ\�Vݘ\�KX��܋X�ܙ\�WH��[�Y[�L��HKLK�H���\�]�][���ܙ\�Vݘ\�KX��܋XX��[�
-WH�[��][ۋX��ܜȏ��^\�XB��Y�^�^\�XT�Y�B��[YO^�[�]B�ې�[��O^�HO��][�]
-K�\��]��[YJ_B�ے�^Q�ۏ^�[�R�^Q�۟B�X�Z�\�H�\��X��]\��\\����������^�_B��\�Ә[YOH��^LH��]�[��\�[�^V�L�H^Vݘ\�KX��܋]^\�[X\�JWHX�Z�\��^Vݘ\�KX��܋]^[]]Y
-WH�\�^�K[�ۙH�][�K[�ۙHXY[��\�[^YX^ZV�L�H��ς��]ۂ�ې�X��^��[�Y\��Y�_B�\�X�Y^�Z[�]��[J
-H�Y[��B��\�Ә[YO^��^\��[��LLK�H��[�Y[Y�[��][ۋX��ܜ�	[�]��[J
-H	��[�Y[��	�^Vݘ\�KX��܋XX��[�
-WHݙ\����Vݘ\�KX��܋XX��[�
-WK�L	�	�^Vݘ\�KX��܋]^[]]Y
-WH�\��܋[��X[��Y	XB����[��^�O^�MHς�؝]ۏ���]����\�Ә[YOH�^V�\H^Vݘ\�KX��܋]^[]]Y
-WH]LHLH����Y�
-�[�\��܈�]�[�K�RH�XY�H�[�\\�XX�Y\��Y�K������]����]���
-NB
+      {/* Messages area */}
+      <div className="flex-1 overflow-y-auto px-3 py-3">
+        {messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-center gap-2">
+            <p className="text-sm text-[var(--color-text-muted)]">Ask anything about this chapter.</p>
+            <div className="flex flex-wrap gap-1.5 justify-center max-w-[260px]">
+              {[
+                'How\'s the pacing?',
+                'Strengthen the opening',
+                'Find weak dialogue',
+                'Trim this chapter',
+              ].map(suggestion => (
+                <button
+                  key={suggestion}
+                  onClick={() => { setInput(suggestion); }}
+                  className="text-[10px] px-2 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:border-[var(--color-accent)] transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {messages.map((msg, i) => (
+              <div
+                key={i}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[90%] rounded-lg px-3 py-2 text-[12px] leading-relaxed ${
+                    msg.role === 'user'
+                      ? 'bg-[var(--color-accent)] text-white rounded-br-sm'
+                      : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-bl-sm'
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start">
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 rounded-bl-sm">
+                  <Loader2 size={14} className="animate-spin text-[var(--color-accent)]" />
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+      </div>
+
+      {/* Input area */}
+      <div className="flex-shrink-0 border-t border-[var(--color-border)] p-2">
+        <div className="flex items-end gap-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 focus-within:border-[var(--color-accent)] transition-colors">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about this chapter..."
+            rows={1}
+            className="flex-1 bg-transparent text-[12px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] resize-none outline-none leading-relaxed max-h-[120px]"
+          />
+          <button
+            onClick={sendMessage}
+            disabled={!input.trim() || loading}
+            className={`flex-shrink-0 p-1.5 rounded-md transition-colors ${
+              input.trim() && !loading
+                ? 'text-[var(--color-accent)] hover:bg-[var(--color-accent)]/10'
+                : 'text-[var(--color-text-muted)] cursor-not-allowed'
+            }`}
+          >
+            <Send size={14} />
+          </button>
+        </div>
+        <p className="text-[9px] text-[var(--color-text-muted)] mt-1 px-1">
+          Shift+Enter for new line. AI reads the full chapter each message.
+        </p>
+      </div>
+    </div>
+  );
+}
