@@ -111,7 +111,7 @@ const TONE_OPTIONS: { label: string; value: ToneOption }[] = [
 // AI Panel Component (lives in right sidebar)
 // ============================================================================
 
-export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
+export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
   const { currentProject } = useStore();
 
   const [isLoading, setIsLoading] = useState(false);
