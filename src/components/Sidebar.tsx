@@ -143,7 +143,7 @@ function SortableChapterItem({
           {chapter.title}
         </span>
         <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0">
-          {chapterWordCount(chapter.id).toLocaleString()}
+          {chapterWordCount(chapter.id) > 0 ? chapterWordCount(chapter.id).toLocaleString() : ''}
         </span>
 
         {/* Menu button */}
@@ -447,7 +447,7 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
           <button
             key={tab.id}
             onClick={() => setActiveSection(tab.id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-[10px] font-medium uppercase tracking-wide transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1 px-1 py-2.5 text-[9px] sm:text-[10px] font-medium uppercase tracking-wide transition-colors whitespace-nowrap overflow-hidden ${
               activeSection === tab.id
                 ? 'text-[var(--color-accent)] border-b-2 border-[var(--color-accent)]'
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
