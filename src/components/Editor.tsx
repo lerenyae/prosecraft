@@ -104,7 +104,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
   // Close break menu on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (breakMenuRef.current && !breakMenuRef.current.contains(e.target as Node)) {
+      if (breakMenuRef.current && !breakMenuRef.current.contains(e.target as globalThis.Node)) {
         setShowBreakMenu(false)
       }
     }
