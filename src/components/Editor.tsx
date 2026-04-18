@@ -224,6 +224,7 @@ interface ToolbarProps {
 }
 
 function Toolbar({ editor, isHidden = false }: ToolbarProps) {
+  const [showBreakMenu, setShowBreakMenu] = useState(false);
   if (!editor || isHidden) return null;
 
   const handleLinkClick = () => {
@@ -280,9 +281,25 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
       <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Ordered List" type="button">
         <ListOrdered size={16} />
       </button>
-      <button onClick={() => editor.chain().focus().setHorizontalRule().run()} className={btn(editor.isActive('horizontalRule'))} title="Scene Break" type="button">
-        <Minus size={16} />
-      </button>
+      <div className="relative">
+        <button onClick={() => setShowBreakMenu(!showBreakMenu)} className={btn(false)} title="Scene Break" type="button">
+          <Minus size={16} />
+        </button>
+        {showBreakMenu && (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 min-w-[100px]">
+            {['∗ ∗ ∗', '— — —', '~ ~ ~', '• • •', '❖'].map(label => (
+              <button
+                key={label}
+                onClick={() => { editor.chain().focus().setHorizontalRule().run(); setShowBreakMenu(false); }}
+                type="button"
+                className="w-full px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] text-center transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className={divider} />
 
