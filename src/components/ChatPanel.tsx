@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Trash2, RefreshCw } from 'lucide-react';
+import { Send, Loader2, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
 interface ChatMessage {
@@ -12,6 +12,26 @@ interface ChatMessage {
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
+}
+
+// Simple markdown-to-HTML for assistant messages
+function renderMarkdown(text: string): string {
+  let html = text
+    // Escape HTML first
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    // Bold: **text** or __text__
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    // Italic: *text* or _text_ (but not inside words with underscores)
+    .replace(/(?<![\w*])\*([^*]+?)\*(?![\w*])/g, '<em>$1</em>')
+    .replace(/(?<![\w_])_([^_]+?)_(?![\w_])/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`([^`]+?)`/g, '<code class="px-1 py-0.5 rounded bg-[var(--color-surface-alt)] text-[11px] font-mono">$1</code>')
+    // Line breaks
+    .replace(/\n/g, '<br/>');
+  return html;
 }
 
 export default function ChatPanel() {
@@ -26,6 +46,7 @@ export default function ChatPanel() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [contextRefreshed, setContextRefreshed] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -51,6 +72,16 @@ export default function ChatPanel() {
     const scenes = chapterScenes(chapter.id);
     return scenes.map(s => s.content || '').join('\n\n');
   }, [chapter, chapterScenes]);
+
+  const copyToClipboard = useCallback(async (text: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      // fallback
+    }
+  }, []);
 
   const sendMessage = useCallback(async () => {
     if (!input.trim() || loading || !currentProject || !chapter) return;
@@ -150,7 +181,7 @@ export default function ChatPanel() {
                 : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
             }`}
           >
-            <RefreshCw size={13} className={contextRefreshed ? '' : ''} />
+            <RefreshCw size={13} />
           </button>
           {messages.length > 0 && (
             <button
@@ -171,7 +202,7 @@ export default function ChatPanel() {
             <p className="text-sm text-[var(--color-text-muted)]">Ask anything about this chapter.</p>
             <div className="flex flex-wrap gap-1.5 justify-center max-w-[260px]">
               {[
-                'How\'s the pacing?',
+                'How is the pacing?',
                 'Strengthen the opening',
                 'Find weak dialogue',
                 'Trim this chapter',
@@ -194,13 +225,29 @@ export default function ChatPanel() {
                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[90%] rounded-lg px-3 py-2 text-[12px] leading-relaxed ${
+                  className={`group relative max-w-[90%] rounded-lg px-3 py-2 text-[12px] leading-relaxed ${
                     msg.role === 'user'
                       ? 'bg-[var(--color-accent)] text-white rounded-br-sm'
                       : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-primary)] rounded-bl-sm'
                   }`}
                 >
-                  <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                  {msg.role === 'assistant' ? (
+                    <div
+                      className="prose-chat break-words"
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                    />
+                  ) : (
+                    <div className="whitespace-pre-wrap break-words">{msg.content}</div>
+                  )}
+                  {msg.role === 'assistant' && (
+                    <button
+                      onClick={() => copyToClipboard(msg.content, i)}
+                      className="absolute top-1.5 right-1.5 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-muted)]"
+                      title="Copy response"
+                    >
+                      {copiedIndex === i ? <Check size={11} className="text-emerald-500" /> : <Copy size={11} />}
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
