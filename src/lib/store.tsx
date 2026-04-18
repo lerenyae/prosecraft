@@ -298,6 +298,23 @@ function saveStateToStorage(state: StoreState): void {
 // Provider Component
 // ============================================================================
 
+
+// Helper: generate next unique chapter title for a project
+function getNextChapterTitle(projectId: string): string {
+  const chapters = JSON.parse(safeGetItem('prosecraft-chapters') || '{}');
+  const projectChapters = Object.values(chapters).filter(
+    (c: any) => c.projectId === projectId
+  );
+  const existingNums = projectChapters
+    .map((c: any) => {
+      const match = c.title.match(/^Chapter\s+(\d+)$/i);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter((n: number) => n > 0);
+  const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+  return `Chapter ${nextNum}`;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(storeReducer, initialState);
   // Hydrate from localStorage on mount (client-side only)
@@ -348,7 +365,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chapter: Chapter = {
         id: chapterId,
         projectId,
-        title: 'Chapter 1',
+        title: getNextChapterTitle(projectId),
         sortOrder: 0,
         createdAt: now,
       };
