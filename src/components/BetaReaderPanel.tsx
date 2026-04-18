@@ -76,7 +76,8 @@ const SEVERITY_CONFIG: Record<string, { icon: typeof CheckCircle2; bg: string; b
 // ============================================================================
 
 export default function BetaReaderPanel({ selectedText, onAnnotationClick }: BetaReaderPanelProps) {
-  const { currentChapter, chapterScenes, currentProject } = useStore();
+  const { currentChapter,
+    projectChapters, chapterScenes, currentProject } = useStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSelectionLoading, setIsSelectionLoading] = useState(false);
@@ -113,6 +114,8 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
           chapterTitle: currentChapter.title,
           chapterContent: content,
           genre: currentProject.genre,
+          chapterNumber: projectChapters.findIndex(c => c.id === currentChapter.id) + 1,
+          totalChapters: projectChapters.length,
         }),
       });
 
