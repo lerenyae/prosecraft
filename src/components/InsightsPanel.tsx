@@ -11,6 +11,14 @@ import {
   Loader2,
   ToggleLeft,
   ToggleRight,
+  Zap,
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Search,
+  Sparkles,
+  ArrowRight,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -60,7 +68,7 @@ function getOverusedWords(text: string): { word: string; count: number }[] {
     .sort((a, b) => b.count - a.count);
 }
 
-export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick?: (word: string) => void }) {
+export default function InsightsPanel() {
   const {
     currentProject,
     currentChapter,
@@ -68,6 +76,7 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
     chapterScenes,
     projectWordCount,
     chapterWordCount,
+    setHighlightWord,
   } = useStore();
 
   const [sessionStartWords, setSessionStartWords] = useState<number | null>(null);
@@ -77,6 +86,28 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
     grammar: { score: number; label: string; issues: string[]; note: string };
     language: { score: number; label: string; qualities: string[]; note: string };
   } | null>(null);
+
+  // Quick Scan state
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanResult, setScanResult] = useState<{
+    verdict: string;
+    scores: Record<string, { score: number; label: string }>;
+    flags: string[];
+    strengths: string[];
+  } | null>(null);
+  const [scanExpanded, setScanExpanded] = useState(true);
+
+  // Filter words analysis state
+  const [filterAnalysis, setFilterAnalysis] = useState<{
+    word: string;
+    count: number;
+    severity: string;
+    explanation: string;
+    example: string;
+    fix: string;
+  }[] | null>(null);
+  const [filterLoading, setFilterLoading] = useState(false);
+  const [filterExpanded, setFilterExpanded] = useState<string | null>(null);
 
   // Track session start word count
   useEffect(() => {
@@ -99,13 +130,6 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
     });
     return texts.join(' ');
   }, [currentProject, projectChapters, chapterScenes]);
-
-  // Per-chapter text for word analysis (falls back to all text if no chapter selected)
-  const chapterText = useMemo(() => {
-    if (!currentChapter) return allText;
-    const scenes = chapterScenes(currentChapter.id);
-    return scenes.map(s => s.content ? stripHtml(s.content) : '').join(' ');
-  }, [currentChapter, chapterScenes, allText]);
 
   const runGrammarCheck = useCallback(async () => {
     if (!currentProject || !allText || allText.length < 50) return;
@@ -134,9 +158,92 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
     }
   }, [currentProject, allText, projectChapters, chapterScenes]);
 
+  // Quick Scan — runs on current chapter
+  const runQuickScan = useCallback(async () => {
+    if (!currentProject) return;
+    const chapter = currentChapter || projectChapters[0];
+    if (!chapter) return;
+
+    const scenes = chapterScenes(chapter.id);
+    const content = scenes.map(s => s.content || '').join('\n\n');
+    if (stripHtml(content).length < 50) return;
+
+    setScanLoading(true);
+    setScanResult(null);
+    try {
+      const chapterIndex = projectChapters.findIndex(ch => ch.id === chapter.id);
+      const position = projectChapters.length > 1
+        ? `chapter ${chapterIndex + 1} of ${projectChapters.length}`
+        : undefined;
+
+      const res = await fetch('/api/ai/quickscan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          chapterTitle: chapter.title,
+          genre: currentProject.genre,
+          chapterPosition: position,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScanResult(data);
+        setScanExpanded(true);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setScanLoading(false);
+    }
+  }, [currentProject, currentChapter, projectChapters, chapterScenes]);
+
+  // Chapter-scoped text for per-chapter analysis
+  const chapterText = useMemo(() => {
+    const chapter = currentChapter || projectChapters[0];
+    if (!chapter) return '';
+    const scenes = chapterScenes(chapter.id);
+    return scenes.map(s => s.content ? stripHtml(s.content) : '').join(' ');
+  }, [currentChapter, projectChapters, chapterScenes]);
+
+  const chapterTitle = (currentChapter || projectChapters[0])?.title || '';
+
   const topWords = useMemo(() => getTopWords(chapterText, 8), [chapterText]);
   const overused = useMemo(() => getOverusedWords(chapterText), [chapterText]);
   const maxWordCount = topWords[0]?.count || 1;
+
+  // Run AI analysis on filter words
+  const runFilterAnalysis = useCallback(async () => {
+    if (!currentProject || overused.length === 0) return;
+    const chapter = currentChapter || projectChapters[0];
+    if (!chapter) return;
+
+    const scenes = chapterScenes(chapter.id);
+    const content = scenes.map(s => s.content || '').join('\n\n');
+
+    setFilterLoading(true);
+    setFilterAnalysis(null);
+    try {
+      const res = await fetch('/api/ai/filterwords', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          filterWords: overused.map(w => w.word),
+          genre: currentProject.genre,
+          chapterTitle: chapter.title,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFilterAnalysis(data.analysis || []);
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setFilterLoading(false);
+    }
+  }, [currentProject, currentChapter, projectChapters, chapterScenes, overused]);
 
   const readingTime = Math.max(1, Math.round(projectWordCount / 250));
   const paragraphCount = allText.split(/\n\n|\.\s+/).filter(p => p.trim().length > 0).length;
@@ -172,6 +279,117 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
             {sessionWords >= 0 ? '+' : ''}{sessionWords.toLocaleString()} words
           </p>
         </div>
+      </div>
+
+      {/* Quick Scan */}
+      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Zap size={14} className="text-[var(--color-accent)]" />
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Quick Scan</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {scanResult && (
+              <button
+                onClick={() => setScanExpanded(!scanExpanded)}
+                className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+              >
+                {scanExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            )}
+            <button
+              onClick={runQuickScan}
+              disabled={scanLoading || projectWordCount < 50}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                scanLoading || projectWordCount < 50
+                  ? 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed'
+                  : 'bg-[var(--color-accent)] text-white hover:opacity-90'
+              }`}
+            >
+              {scanLoading ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" />
+                  Scanning...
+                </span>
+              ) : scanResult ? 'Re-scan' : 'Scan Chapter'}
+            </button>
+          </div>
+        </div>
+
+        {!scanResult && !scanLoading && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            {projectWordCount < 50
+              ? 'Write at least 50 words to scan.'
+              : 'One-click health check on your current chapter.'}
+          </p>
+        )}
+
+        {scanResult && scanExpanded && (
+          <div className="flex flex-col gap-3 mt-1">
+            {/* Verdict */}
+            <p className="text-sm font-medium text-[var(--color-text-primary)] leading-snug">
+              {scanResult.verdict}
+            </p>
+
+            {/* Score bars */}
+            <div className="flex flex-col gap-2">
+              {Object.entries(scanResult.scores).map(([key, { score, label }]) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-[var(--color-text-muted)] uppercase w-14 flex-shrink-0">{key}</span>
+                  <div className="flex-1 h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        score >= 7 ? 'bg-emerald-500' :
+                        score >= 5 ? 'bg-[var(--color-accent)]' :
+                        'bg-amber-500'
+                      }`}
+                      style={{ width: `${score * 10}%` }}
+                    />
+                  </div>
+                  <span className={`text-[10px] font-medium w-16 text-right flex-shrink-0 ${
+                    score >= 7 ? 'text-emerald-500' :
+                    score >= 5 ? 'text-[var(--color-text-secondary)]' :
+                    'text-amber-500'
+                  }`}>{label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Flags */}
+            {scanResult.flags.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <AlertTriangle size={10} className="text-amber-500" />
+                  <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-medium">Fix</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {scanResult.flags.map((flag, i) => (
+                    <p key={i} className="text-xs text-[var(--color-text-secondary)] pl-3 border-l-2 border-amber-500/30">
+                      {flag}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Strengths */}
+            {scanResult.strengths.length > 0 && (
+              <div>
+                <div className="flex items-center gap-1 mb-1.5">
+                  <CheckCircle2 size={10} className="text-emerald-500" />
+                  <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-medium">Working</span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  {scanResult.strengths.map((s, i) => (
+                    <p key={i} className="text-xs text-[var(--color-text-secondary)] pl-3 border-l-2 border-emerald-500/30">
+                      {s}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Manuscript Goal */}
@@ -275,43 +493,35 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
         </div>
       </div>
 
-      {/* Chapter Summary */}
-      {projectChapters.length > 0 && (
-        <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Chapters</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-lg font-semibold text-[var(--color-text-primary)]">{projectChapters.length}</p>
-              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Total</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
-                {projectChapters.length > 0 ? Math.round(projectWordCount / projectChapters.length).toLocaleString() : 0}
-              </p>
-              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Avg Words</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
-                {Math.max(...projectChapters.map(ch => chapterWordCount(ch.id)), 0).toLocaleString()}
-              </p>
-              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Longest</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
-                {projectChapters.length > 0 ? Math.min(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString() : 0}
-              </p>
-              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Shortest</p>
-            </div>
-          </div>
+      {/* Chapter Breakdown */}
+      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Chapters</p>
+        <div className="flex flex-col gap-2">
+          {projectChapters.map(ch => {
+            const wc = chapterWordCount(ch.id);
+            const chPct = goal > 0 ? Math.min(100, Math.round((wc / (goal / Math.max(projectChapters.length, 1))) * 100)) : 0;
+            return (
+              <div key={ch.id} className="flex items-center gap-2">
+                <span className="text-xs text-[var(--color-text-secondary)] w-24 truncate flex-shrink-0">{ch.title}</span>
+                <div className="flex-1 h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, chPct)}%` }}
+                  />
+                </div>
+                <span className="text-xs text-[var(--color-text-muted)] w-12 text-right flex-shrink-0">
+                  {wc.toLocaleString()}
+                </span>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* Most Used Words */}
       {topWords.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
-            Most Used Words {currentChapter ? `\u2014 ${currentChapter.title}` : '\u2014 All Chapters'}
-          </p>
+          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Most Used Words {chapterTitle ? `\u2014 ${chapterTitle}` : ''}</p>
           <div className="flex flex-col gap-1.5">
             {topWords.map(({ word, count }) => (
               <div key={word} className="flex items-center gap-2">
@@ -329,12 +539,12 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
         </div>
       )}
 
-      {/* Grammar Score */}
+      {/* Grammar & Language Score */}
       <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <SpellCheck size={14} className="text-[var(--color-accent)]" />
-            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Grammar Score</p>
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Grammar & Language</p>
           </div>
           <button
             onClick={() => {
@@ -355,43 +565,67 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
           </div>
         )}
 
-        {grammarEnabled && grammarResult && !grammarLoading && (() => {
-          const unified = Math.round((grammarResult.grammar.score + grammarResult.language.score) / 2);
-          const label = unified >= 90 ? 'Excellent' : unified >= 80 ? 'Strong' : unified >= 70 ? 'Good' : unified >= 55 ? 'Needs Work' : 'Rough';
-          const allIssues = [...grammarResult.grammar.issues, ...grammarResult.language.qualities].slice(0, 4);
-          return (
+        {grammarEnabled && grammarResult && !grammarLoading && (
           <div className="flex flex-col gap-3">
-            {/* Unified Score */}
-            <div className="flex items-center gap-4">
-              <div className="relative flex-shrink-0">
-                <svg width="56" height="56" viewBox="0 0 56 56">
-                  <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="4" />
-                  <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-accent)" strokeWidth="4" strokeLinecap="round"
-                    strokeDasharray={2 * Math.PI * 22} strokeDashoffset={2 * Math.PI * 22 * (1 - unified / 100)}
-                    transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold text-[var(--color-accent)]">{unified}</span>
+            {/* Grammar Score */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-[var(--color-text-secondary)]">Grammar</span>
+                <span className={`text-xs font-semibold ${
+                  grammarResult.grammar.score >= 85 ? 'text-emerald-500' :
+                  grammarResult.grammar.score >= 70 ? 'text-[var(--color-accent)]' :
+                  'text-amber-500'
+                }`}>{grammarResult.grammar.score}/100</span>
+              </div>
+              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    grammarResult.grammar.score >= 85 ? 'bg-emerald-500' :
+                    grammarResult.grammar.score >= 70 ? 'bg-[var(--color-accent)]' :
+                    'bg-amber-500'
+                  }`}
+                  style={{ width: `${grammarResult.grammar.score}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.grammar.note}</p>
+              {grammarResult.grammar.issues.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {grammarResult.grammar.issues.slice(0, 3).map((issue, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/15">{issue}</span>
+                  ))}
                 </div>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-[var(--color-text-primary)]">{label}</p>
-                <p className="text-[10px] text-[var(--color-text-muted)] leading-relaxed mt-0.5">{grammarResult.grammar.note}</p>
-              </div>
+              )}
             </div>
 
-            {/* Tags */}
-            {allIssues.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {allIssues.map((item, i) => (
-                  <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">{item}</span>
-                ))}
+            {/* Language Score */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-[var(--color-text-secondary)]">Language</span>
+                <span className={`text-xs font-semibold ${
+                  grammarResult.language.score >= 85 ? 'text-emerald-500' :
+                  grammarResult.language.score >= 70 ? 'text-[var(--color-accent)]' :
+                  'text-amber-500'
+                }`}>{grammarResult.language.score}/100</span>
               </div>
-            )}
-
-            {grammarResult.language.note && (
-              <p className="text-[10px] text-[var(--color-text-muted)] leading-relaxed">{grammarResult.language.note}</p>
-            )}
+              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    grammarResult.language.score >= 85 ? 'bg-emerald-500' :
+                    grammarResult.language.score >= 70 ? 'bg-[var(--color-accent)]' :
+                    'bg-amber-500'
+                  }`}
+                  style={{ width: `${grammarResult.language.score}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.language.note}</p>
+              {grammarResult.language.qualities.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {grammarResult.language.qualities.slice(0, 3).map((q, i) => (
+                    <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/15">{q}</span>
+                  ))}
+                </div>
+              )}
+            </div>
 
             {/* Re-run button */}
             <button
@@ -401,32 +635,119 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
               Re-analyze
             </button>
           </div>
-          );
-        })()}
+        )}
 
         {grammarEnabled && !grammarResult && !grammarLoading && projectWordCount < 50 && (
           <p className="text-xs text-[var(--color-text-muted)]">Write at least 50 words to get a score.</p>
         )}
       </div>
 
-      {/* Overused Words Warning */}
+      {/* Filter Words — Chapter Scoped */}
       {overused.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
-            Filter Words to Watch {currentChapter ? `\u2014 ${currentChapter.title}` : ''}
-          </p>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={14} className="text-amber-500" />
+              <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
+                Filter Words {chapterTitle ? `\u2014 ${chapterTitle}` : ''}
+              </p>
+            </div>
+            <button
+              onClick={runFilterAnalysis}
+              disabled={filterLoading}
+              className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
+                filterLoading
+                  ? 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed'
+                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
+              }`}
+            >
+              {filterLoading ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 size={10} className="animate-spin" />
+                  Analyzing...
+                </span>
+              ) : filterAnalysis ? (
+                <span className="flex items-center gap-1">
+                  <Sparkles size={10} />
+                  Re-analyze
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <Sparkles size={10} />
+                  Why these?
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Clickable word badges */}
+          <div className="flex flex-wrap gap-1.5 mb-2">
             {overused.map(({ word, count }) => (
               <button
                 key={word}
-                onClick={() => onFilterWordClick?.(word)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent)] transition-colors cursor-pointer"
+                onClick={() => setHighlightWord(word)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer"
+                title={`Click to find "${word}" in editor`}
               >
+                <Search size={10} className="opacity-50" />
                 {word}
-                <span className="text-[10px] font-bold bg-[var(--color-border)] text-[var(--color-text-muted)] px-1 rounded">x{count}</span>
+                <span className="text-[10px] opacity-70">x{count}</span>
               </button>
             ))}
           </div>
+
+          {/* AI Analysis Results */}
+          {filterAnalysis && filterAnalysis.length > 0 && (
+            <div className="flex flex-col gap-1.5 mt-3 pt-3 border-t border-[var(--color-border)]">
+              {filterAnalysis.map((item) => (
+                <div key={item.word} className="rounded-md overflow-hidden">
+                  {/* Collapsed row */}
+                  <button
+                    onClick={() => setFilterExpanded(filterExpanded === item.word ? null : item.word)}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[var(--color-surface-alt)] transition-colors rounded-md"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      item.severity === 'high' ? 'bg-red-500' :
+                      item.severity === 'medium' ? 'bg-amber-500' :
+                      'bg-yellow-400'
+                    }`} />
+                    <span className="text-xs font-medium text-[var(--color-text-secondary)] flex-1">{item.word}</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)]">x{item.count}</span>
+                    {filterExpanded === item.word ? <ChevronUp size={12} className="text-[var(--color-text-muted)]" /> : <ChevronDown size={12} className="text-[var(--color-text-muted)]" />}
+                  </button>
+
+                  {/* Expanded detail */}
+                  {filterExpanded === item.word && (
+                    <div className="px-2.5 pb-2.5 flex flex-col gap-2">
+                      <p className="text-[11px] text-[var(--color-text-secondary)] leading-relaxed">
+                        {item.explanation}
+                      </p>
+                      {item.example && (
+                        <div className="pl-2.5 border-l-2 border-amber-500/30">
+                          <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-medium mb-0.5">Original</p>
+                          <p className="text-[11px] text-[var(--color-text-secondary)] italic">&ldquo;{item.example}&rdquo;</p>
+                        </div>
+                      )}
+                      {item.fix && (
+                        <div className="pl-2.5 border-l-2 border-emerald-500/30">
+                          <p className="text-[10px] text-[var(--color-text-muted)] uppercase font-medium mb-0.5">Suggested fix</p>
+                          <p className="text-[11px] text-emerald-700 dark:text-emerald-400 italic">&ldquo;{item.fix}&rdquo;</p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setHighlightWord(item.word)}
+                        className="self-start flex items-center gap-1 text-[10px] text-[var(--color-accent)] hover:underline"
+                      >
+                        <Search size={10} />
+                        Find in editor
+                        <ArrowRight size={10} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
