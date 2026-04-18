@@ -207,7 +207,7 @@ body {
 
 /* Search highlighting */
 .search-highlight {
-  background-color: rgba(251, 191, 36, 0.3);
+  background-color: rgba(251, 191, 36, 0.5);
   border-radius: 2px;
   padding: 1px 0;
 }
@@ -218,9 +218,9 @@ body {
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4);
 }
 .dark .search-highlight {
-  background-color: rgba(251, 191, 36, 0.2);
+  background-color: rgba(251, 191, 36, 0.4);
 }
 .dark .search-highlight-active {
-  background-color: rgba(251, 191, 36, 0.5);
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3);
+  background-color: rgba(251, 191, 36, 0.7);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5);
 }
