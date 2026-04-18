@@ -75,7 +75,6 @@ export default function InsightsPanel() {
     projectChapters,
     chapterScenes,
     projectWordCount,
-    chapterWordCount,
     setHighlightWord,
   } = useStore();
 
@@ -493,30 +492,6 @@ export default function InsightsPanel() {
         </div>
       </div>
 
-      {/* Chapter Breakdown */}
-      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-        <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Chapters</p>
-        <div className="flex flex-col gap-2">
-          {projectChapters.map(ch => {
-            const wc = chapterWordCount(ch.id);
-            const chPct = goal > 0 ? Math.min(100, Math.round((wc / (goal / Math.max(projectChapters.length, 1))) * 100)) : 0;
-            return (
-              <div key={ch.id} className="flex items-center gap-2">
-                <span className="text-xs text-[var(--color-text-secondary)] w-24 truncate flex-shrink-0">{ch.title}</span>
-                <div className="flex-1 h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, chPct)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-[var(--color-text-muted)] w-12 text-right flex-shrink-0">
-                  {wc.toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* Most Used Words */}
       {topWords.length > 0 && (
@@ -658,7 +633,7 @@ export default function InsightsPanel() {
               className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
                 filterLoading
                   ? 'bg-[var(--color-border)] text-[var(--color-text-muted)] cursor-not-allowed'
-                  : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 border border-amber-500/20'
+                  : 'bg-amber-500/25 text-amber-800 dark:text-amber-300 hover:bg-amber-500/40 border border-amber-500/40'
               }`}
             >
               {filterLoading ? (
@@ -686,7 +661,7 @@ export default function InsightsPanel() {
               <button
                 key={word}
                 onClick={() => setHighlightWord(word)}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:border-amber-500/40 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-amber-500/25 text-amber-800 dark:text-amber-300 border border-amber-500/40 hover:bg-amber-500/40 hover:border-amber-500/60 transition-colors cursor-pointer"
                 title={`Click to find "${word}" in editor`}
               >
                 <Search size={10} className="opacity-50" />
