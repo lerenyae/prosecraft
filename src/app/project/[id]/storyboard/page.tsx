@@ -62,9 +62,9 @@ const ACT_COLORS: Record<number, string> = {
 };
 
 const ACT_LABELS: Record<number, string> = {
-  1: 'Act I â Setup',
-  2: 'Act II â Confrontation',
-  3: 'Act III â Resolution' 
+  1: 'Act I -- Setup',
+  2: 'Act II -- Confrontation',
+  3: 'Act III -- Resolution' 
 };
 
 // ============================================================================
@@ -231,7 +231,7 @@ function BeatSheetView({
     <div className="space-y-2">
       {template.beats.map((templateBeat, idx) => {
         const beat = beats.find(b => b.beatType === templateBeat.beatType) || {
-          id: generateId(),
+          id: `beat-${templateBeat.beatType}`,
           projectId: '',
           beatType: templateBeat.beatType,
           title: '',
@@ -258,7 +258,7 @@ function BeatSheetView({
             <div className={`flex gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 border-l-4 ${ACT_COLORS[templateBeat.act]}`}>
               {/* Completion toggle */}
               <button
-                onClick={() => onUpdateBeat(beat.id, { completed: !beat.completed })}
+                onClick={() => onUpdateBeat(beat.id, { completed: !beat.completed, beatType: templateBeat.beatType })}
                 className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors ${
                   beat.completed
                     ? 'bg-green-500 border-green-500 text-white'
@@ -285,7 +285,7 @@ function BeatSheetView({
                 {/* User's notes for this beat */}
                 <textarea
                   value={beat.description}
-                  onChange={(e) => onUpdateBeat(beat.id, { description: e.target.value })}
+                  onChange={(e) => onUpdateBeat(beat.id, { description: e.target.value, beatType: templateBeat.beatType })}
                   placeholder="How does this beat play out in your story?"
                   rows={2}
                   className="w-full text-sm bg-gray-50 dark:bg-gray-800/50 rounded-md border border-gray-200 dark:border-gray-700 px-3 py-2 resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-600"
@@ -484,7 +484,7 @@ export default function StoryboardPage({ params }: StoryboardPageProps) {
         <div className="h-5 w-px bg-gray-200 dark:bg-gray-700" />
         <h1 className="text-sm font-semibold flex items-center gap-2">
           <LayoutGrid className="w-4 h-4 text-purple-500" />
-          Storyboard â {project.title}
+          Storyboard -- {project.title}
         </h1>
         <div className="flex-1" />
 
