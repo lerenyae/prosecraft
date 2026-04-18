@@ -326,7 +326,13 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
 
   const handleAddChapter = () => {
     if (!currentProject) return;
-    const newChapter = createChapter(currentProject.id, `Chapter ${projectChapters.length + 1}`);
+    const newChapter = (() => {
+      const existingNums = projectChapters
+        .map(c => { const m = c.title.match(/^Chapter\s+(\d+)$/i); return m ? parseInt(m[1], 10) : 0; })
+        .filter(n => n > 0);
+      const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+      return createChapter(currentProject.id, `Chapter ${nextNum}`);
+    })();
     setCurrentChapter(newChapter.id);
     // Auto-select first scene
     const scenes = chapterScenes(newChapter.id);
