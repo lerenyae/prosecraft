@@ -276,30 +276,41 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
       </div>
 
       {/* Chapter Summary */}
-      <div className="p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <BookOpen size={14} className="text-[var(--color-accent)]" />
-            <span className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Chapters</span>
+      {projectChapters.length > 0 && (
+        <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Chapters</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">{projectChapters.length}</p>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Total</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
+                {projectChapters.length > 0 ? Math.round(projectWordCount / projectChapters.length).toLocaleString() : 0}
+              </p>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Avg Words</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
+                {Math.max(...projectChapters.map(ch => chapterWordCount(ch.id)), 0).toLocaleString()}
+              </p>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Longest</p>
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-[var(--color-text-primary)]">
+                {projectChapters.length > 0 ? Math.min(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString() : 0}
+              </p>
+              <p className="text-[10px] text-[var(--color-text-muted)] uppercase">Shortest</p>
+            </div>
           </div>
-          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{projectChapters.length}</span>
         </div>
-        {projectChapters.length > 0 && (
-          <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
-            <span>Avg: {Math.round(projectWordCount / projectChapters.length).toLocaleString()} words/ch</span>
-            <span>·</span>
-            <span>Longest: {Math.max(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString()}</span>
-            <span>·</span>
-            <span>Shortest: {Math.min(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString()}</span>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Most Used Words */}
       {topWords.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
           <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
-            Most Used Words {currentChapter ? `— ${currentChapter.title}` : '— All Chapters'}
+            Most Used Words {currentChapter ? `\u2014 ${currentChapter.title}` : '\u2014 All Chapters'}
           </p>
           <div className="flex flex-col gap-1.5">
             {topWords.map(({ word, count }) => (
@@ -318,12 +329,12 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
         </div>
       )}
 
-      {/* Grammar & Language Score */}
+      {/* Grammar Score */}
       <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <SpellCheck size={14} className="text-[var(--color-accent)]" />
-            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Grammar & Language</p>
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Grammar Score</p>
           </div>
           <button
             onClick={() => {
@@ -344,67 +355,43 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
           </div>
         )}
 
-        {grammarEnabled && grammarResult && !grammarLoading && (
+        {grammarEnabled && grammarResult && !grammarLoading && (() => {
+          const unified = Math.round((grammarResult.grammar.score + grammarResult.language.score) / 2);
+          const label = unified >= 90 ? 'Excellent' : unified >= 80 ? 'Strong' : unified >= 70 ? 'Good' : unified >= 55 ? 'Needs Work' : 'Rough';
+          const allIssues = [...grammarResult.grammar.issues, ...grammarResult.language.qualities].slice(0, 4);
+          return (
           <div className="flex flex-col gap-3">
-            {/* Grammar Score */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-[var(--color-text-secondary)]">Grammar</span>
-                <span className={`text-xs font-semibold ${
-                  grammarResult.grammar.score >= 85 ? 'text-emerald-500' :
-                  grammarResult.grammar.score >= 70 ? 'text-[var(--color-accent)]' :
-                  'text-amber-500'
-                }`}>{grammarResult.grammar.score}/100</span>
-              </div>
-              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    grammarResult.grammar.score >= 85 ? 'bg-emerald-500' :
-                    grammarResult.grammar.score >= 70 ? 'bg-[var(--color-accent)]' :
-                    'bg-amber-500'
-                  }`}
-                  style={{ width: `${grammarResult.grammar.score}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.grammar.note}</p>
-              {grammarResult.grammar.issues.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {grammarResult.grammar.issues.slice(0, 3).map((issue, i) => (
-                    <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-orange-200 dark:bg-amber-500/15 text-orange-900 dark:text-amber-300 border border-orange-400 dark:border-amber-500/20">{issue}</span>
-                  ))}
+            {/* Unified Score */}
+            <div className="flex items-center gap-4">
+              <div className="relative flex-shrink-0">
+                <svg width="56" height="56" viewBox="0 0 56 56">
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-border)" strokeWidth="4" />
+                  <circle cx="28" cy="28" r="22" fill="none" stroke="var(--color-accent)" strokeWidth="4" strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 22} strokeDashoffset={2 * Math.PI * 22 * (1 - unified / 100)}
+                    transform="rotate(-90 28 28)" style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold text-[var(--color-accent)]">{unified}</span>
                 </div>
-              )}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-[var(--color-text-primary)]">{label}</p>
+                <p className="text-[10px] text-[var(--color-text-muted)] leading-relaxed mt-0.5">{grammarResult.grammar.note}</p>
+              </div>
             </div>
 
-            {/* Language Score */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-[var(--color-text-secondary)]">Language</span>
-                <span className={`text-xs font-semibold ${
-                  grammarResult.language.score >= 85 ? 'text-emerald-500' :
-                  grammarResult.language.score >= 70 ? 'text-[var(--color-accent)]' :
-                  'text-amber-500'
-                }`}>{grammarResult.language.score}/100</span>
+            {/* Tags */}
+            {allIssues.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {allIssues.map((item, i) => (
+                  <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] border border-[var(--color-border)]">{item}</span>
+                ))}
               </div>
-              <div className="h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden mb-1">
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    grammarResult.language.score >= 85 ? 'bg-emerald-500' :
-                    grammarResult.language.score >= 70 ? 'bg-[var(--color-accent)]' :
-                    'bg-amber-500'
-                  }`}
-                  style={{ width: `${grammarResult.language.score}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-[var(--color-text-muted)]">{grammarResult.language.note}</p>
-              {grammarResult.language.qualities.length > 0 && (
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {grammarResult.language.qualities.slice(0, 3).map((q, i) => (
-                    <span key={i} className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-200 dark:bg-emerald-500/15 text-emerald-900 dark:text-emerald-300 border border-emerald-400 dark:border-emerald-500/20">{q}</span>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
+
+            {grammarResult.language.note && (
+              <p className="text-[10px] text-[var(--color-text-muted)] leading-relaxed">{grammarResult.language.note}</p>
+            )}
 
             {/* Re-run button */}
             <button
@@ -414,7 +401,8 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
               Re-analyze
             </button>
           </div>
-        )}
+          );
+        })()}
 
         {grammarEnabled && !grammarResult && !grammarLoading && projectWordCount < 50 && (
           <p className="text-xs text-[var(--color-text-muted)]">Write at least 50 words to get a score.</p>
@@ -425,17 +413,17 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
       {overused.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
           <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">
-            Filter Words to Watch {currentChapter ? `— ${currentChapter.title}` : ''}
+            Filter Words to Watch {currentChapter ? `\u2014 ${currentChapter.title}` : ''}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {overused.map(({ word, count }) => (
               <button
                 key={word}
                 onClick={() => onFilterWordClick?.(word)}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-amber-600 dark:bg-orange-500/20 text-white dark:text-orange-300 border border-amber-700 dark:border-orange-500/30 hover:bg-amber-700 dark:hover:bg-orange-500/30 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-accent-light)] hover:text-[var(--color-accent)] transition-colors cursor-pointer"
               >
                 {word}
-                <span className="text-[10px] font-bold bg-amber-700 dark:bg-orange-500/30 text-white dark:text-orange-200 px-1 rounded">x{count}</span>
+                <span className="text-[10px] font-bold bg-[var(--color-border)] text-[var(--color-text-muted)] px-1 rounded">x{count}</span>
               </button>
             ))}
           </div>
