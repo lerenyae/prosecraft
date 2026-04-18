@@ -111,7 +111,6 @@ body {
 .tiptap h3 + p,
 .tiptap h4 + p,
 .tiptap blockquote + p,
-.tiptap .scene-break + p,
 .tiptap hr + p,
 .tiptap > p:first-child {
   text-indent: 0;
@@ -158,27 +157,16 @@ body {
 }
 
 /* Scene breaks */
-/* Scene break node */
-.tiptap .scene-break {
+.tiptap hr {
+  border: none;
   text-align: center;
   margin: 2rem 0;
+}
+.tiptap hr::after {
+  content: '* * *';
   color: var(--color-text-muted);
-  font-size: 1rem;
+  font-size: 0.875rem;
   letter-spacing: 0.5em;
-  user-select: none;
-  cursor: default;
-  padding: 0.5rem 0;
-}
-.tiptap .scene-break:hover {
-  color: var(--color-text-secondary);
-}
-.tiptap .scene-break[data-scene-break-style="fleuron"],
-.tiptap .scene-break[data-scene-break-style="ornament"] {
-  font-size: 1.25rem;
-  letter-spacing: 0;
-}
-.tiptap .scene-break + p {
-  text-indent: 0;
 }
 
 /* Placeholder */
@@ -215,4 +203,24 @@ body {
 .selection-focus-mode .tiptap ::selection {
   background-color: var(--color-accent);
   color: var(--color-surface);
+}
+
+/* Search highlighting */
+.search-highlight {
+  background-color: rgba(251, 191, 36, 0.3);
+  border-radius: 2px;
+  padding: 1px 0;
+}
+.search-highlight-active {
+  background-color: rgba(251, 191, 36, 0.7);
+  border-radius: 2px;
+  padding: 1px 0;
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4);
+}
+.dark .search-highlight {
+  background-color: rgba(251, 191, 36, 0.2);
+}
+.dark .search-highlight-active {
+  background-color: rgba(251, 191, 36, 0.5);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.3);
 }
