@@ -8,6 +8,8 @@ interface AnalyzeRequest {
   selectedText?: string;
   context?: string;
   genre?: string;
+  chapterNumber?: number;
+  totalChapters?: number;
 }
 
 function stripHtml(html: string): string {
@@ -113,9 +115,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Chapter content is empty' }, { status: 400 });
       }
       systemPrompt = getChapterPrompt(genre);
+    const positionContext = body.chapterNumber && body.totalChapters
+        ? `[This is chapter ${String.fromCharCode(36)}{body.chapterNumber} of ${String.fromCharCode(36)}{body.totalChapters} in the manuscript]\n\n`
+        : '';
       userPrompt = body.chapterTitle
-        ? `Chapter: "${body.chapterTitle}"\n\n${plainText}`
-        : plainText;
+        ? `${String.fromCharCode(36)}{positionContext}Chapter: "${String.fromCharCode(36)}{body.chapterTitle}"\n\n${String.fromCharCode(36)}{plainText}`
+        : `${String.fromCharCode(36)}{positionContext}${String.fromCharCode(36)}{plainText}`;
     }
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
