@@ -12,7 +12,10 @@ import {
   ChevronRight,
   Search,
   X,
-  Sparkles
+  Sparkles,
+  Wand2,
+  Loader2,
+  Zap,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import {
@@ -309,6 +312,12 @@ export default function CharactersPage({ params }: CharacterPageProps) {
   const [activeTab, setActiveTab] = useState<ProfileTab>('bio');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [showAIGenerate, setShowAIGenerate] = useState(false);
+  const [aiPrompt, setAIPrompt] = useState('');
+  const [aiRole, setAIRole] = useState<string>('supporting');
+  const [aiLoading, setAILoading] = useState(false);
+  const [aiExpandLoading, setAIExpandLoading] = useState(false);
+  const [aiError, setAIError] = useState<string | null>(null);
 
   // --- Persistence ---
   const charKey = `prosecraft-characters-v2-${projectId}`;
@@ -381,7 +390,77 @@ export default function CharactersPage({ params }: CharacterPageProps) {
     if (selectedId === id) setSelectedId(updated[0]?.id || null);
   }, [characters, relationships, selectedId, saveCharacters, saveRelationships]);
 
-  // --- Selected character ---
+  // --- AI Generate Character ---
+  const aiGenerateCharacter = useCallback(async () => {
+    if (!aiPrompt.trim() || aiLoading) return;
+    setAILoading(true);
+    setAIError(null);
+    try {
+      const res = await fetch('/api/ai/character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          prompt: aiPrompt.trim(),
+          genre: project?.genre,
+          role: aiRole,
+          existingNames: characters.map(c => c.name).filter(Boolean),
+        }),
+      });
+      if (!res.ok) throw new Error('AI generation failed');
+      const data = await res.json();
+      if (data.character) {
+        const newChar: Character = {
+          id: generateId(),
+          projectId,
+          ...data.character,
+          role: data.character.role || aiRole,
+          genreFields: {},
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        const updated = [...characters, newChar];
+        saveCharacters(updated);
+        setSelectedId(newChar.id);
+        setActiveTab('bio');
+        setShowAIGenerate(false);
+        setAIPrompt('');
+      }
+    } catch (err) {
+      setAIError(err instanceof Error ? err.message : 'Failed to generate character');
+    } finally {
+      setAILoading(false);
+    }
+  }, [aiPrompt, aiRole, aiLoading, project?.genre, characters, projectId, saveCharacters]);
+
+  // --- AI Expand Character ---
+  const aiExpandCharacter = useCallback(async () => {
+    if (!selected || aiExpandLoading) return;
+    setAIExpandLoading(true);
+    setAIError(null);
+    try {
+      const res = await fetch('/api/ai/character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'expand',
+          character: selected,
+          genre: project?.genre,
+        }),
+      });
+      if (!res.ok) throw new Error('AI expansion failed');
+      const data = await res.json();
+      if (data.character && Object.keys(data.character).length > 0) {
+        updateCharacter(selected.id, data.character);
+      }
+    } catch (err) {
+      setAIError(err instanceof Error ? err.message : 'Failed to expand character');
+    } finally {
+      setAIExpandLoading(false);
+    }
+  }, [selected, aiExpandLoading, project?.genre, updateCharacter]);
+
+    // --- Selected character ---
   const selected = useMemo(() => characters.find(c => c.id === selectedId), [characters, selectedId]);
 
   // --- Genre fields ---
@@ -460,20 +539,86 @@ export default function CharactersPage({ params }: CharacterPageProps) {
               <div className="text-center py-12 text-gray-400 dark:text-gray-600">
                 <User className="w-10 h-10 mx-auto mb-3 opacity-50" />
                 <p className="text-sm">No characters yet</p>
-                <p className="text-xs mt-1">Create your first character to get started</p>
+                <p className="text-xs mt-1">Use AI Generate or create one manually</p>
               </div>
             )}
           </div>
-          {/* Add button */}
-          <div className="p-3 border-t border-gray-200 dark:border-gray-800">
+          {/* Add buttons */}
+          <div className="p-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
+            <button
+              onClick={() => setShowAIGenerate(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors"
+            >
+              <Wand2 className="w-4 h-4" /> AI Generate
+            </button>
             <button
               onClick={addCharacter}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
-              <Plus className="w-4 h-4" /> New Character
+              <Plus className="w-4 h-4" /> Manual
             </button>
           </div>
         </div>
+
+
+          {/* AI Generate Modal */}
+          {showAIGenerate && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => !aiLoading && setShowAIGenerate(false)}>
+              <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-md mx-4 p-6" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2 mb-4">
+                  <Wand2 className="w-5 h-5 text-purple-500" />
+                  <h3 className="text-lg font-semibold">AI Character Generator</h3>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Describe your character in a few words or sentences. The AI will generate a full profile.
+                </p>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAIPrompt(e.target.value)}
+                  placeholder="e.g., A reclusive librarian who secretly runs an underground book smuggling ring in a dystopian city..."
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none placeholder:text-gray-400"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter' && e.metaKey) aiGenerateCharacter(); }}
+                />
+                <div className="flex items-center gap-3 mt-3">
+                  <label className="text-xs text-gray-500 dark:text-gray-400">Role:</label>
+                  <select
+                    value={aiRole}
+                    onChange={(e) => setAIRole(e.target.value)}
+                    className="text-sm px-2 py-1 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800"
+                  >
+                    {CHARACTER_ROLE_OPTIONS.map(r => (
+                      <option key={r.value} value={r.value}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                {aiError && (
+                  <p className="text-xs text-red-500 mt-2">{aiError}</p>
+                )}
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={() => { setShowAIGenerate(false); setAIError(null); }}
+                    disabled={aiLoading}
+                    className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={aiGenerateCharacter}
+                    disabled={!aiPrompt.trim() || aiLoading}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {aiLoading ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Generating...</>
+                    ) : (
+                      <><Sparkles className="w-4 h-4" /> Generate</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Right: Profile Editor */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -526,13 +671,28 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                       <span className={`inline-block w-2.5 h-2.5 rounded-full ${ROLE_COLORS[selected.role] || 'bg-gray-400'}`}></span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { if (confirm('Delete this character?')) deleteCharacter(selected.id); }}
-                    className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
-                    title="Delete character"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={aiExpandCharacter}
+                      disabled={aiExpandLoading}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-950/50 border border-purple-200 dark:border-purple-800 transition-colors disabled:opacity-50"
+                      title="AI fills in empty fields based on existing details"
+                    >
+                      {aiExpandLoading ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5" />
+                      )}
+                      {aiExpandLoading ? 'Expanding...' : 'AI Expand'}
+                    </button>
+                    <button
+                      onClick={() => { if (confirm('Delete this character?')) deleteCharacter(selected.id); }}
+                      className="p-2 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      title="Delete character"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
