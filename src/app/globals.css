@@ -111,6 +111,7 @@ body {
 .tiptap h3 + p,
 .tiptap h4 + p,
 .tiptap blockquote + p,
+.tiptap .scene-break + p,
 .tiptap hr + p,
 .tiptap > p:first-child {
   text-indent: 0;
@@ -157,16 +158,27 @@ body {
 }
 
 /* Scene breaks */
-.tiptap hr {
-  border: none;
+/* Scene break node */
+.tiptap .scene-break {
   text-align: center;
   margin: 2rem 0;
-}
-.tiptap hr::after {
-  content: '* * *';
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: 1rem;
   letter-spacing: 0.5em;
+  user-select: none;
+  cursor: default;
+  padding: 0.5rem 0;
+}
+.tiptap .scene-break:hover {
+  color: var(--color-text-secondary);
+}
+.tiptap .scene-break[data-scene-break-style="fleuron"],
+.tiptap .scene-break[data-scene-break-style="ornament"] {
+  font-size: 1.25rem;
+  letter-spacing: 0;
+}
+.tiptap .scene-break + p {
+  text-indent: 0;
 }
 
 /* Placeholder */
