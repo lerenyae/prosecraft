@@ -291,7 +291,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
             {['* * *', '- - -', '~ ~ ~', '. . .', '# # #'].map(label => (
               <button
                 key={label}
-                onClick={() => { editor.chain().focus().setHorizontalRule().run(); setShowBreakMenu(false); }}
+                onClick={() => { (editor.commands as Record<string, (style: string) => boolean>).setStyledHorizontalRule(label); setShowBreakMenu(false); }}
                 type="button"
                 className="w-full px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] text-center transition-colors"
               >
@@ -409,11 +409,35 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
       }),
       SearchHighlight,
       HorizontalRule.extend({
+        addAttributes() {
+          return {
+            separatorStyle: {
+              default: '* * *',
+              parseHTML: (element: HTMLElement) => element.getAttribute('data-separator-style') || '* * *',
+              renderHTML: (attributes: Record<string, string>) => ({
+                'data-separator-style': attributes.separatorStyle || '* * *',
+              }),
+            },
+          };
+        },
+        addCommands() {
+          return {
+            setStyledHorizontalRule: (style: string) => ({ chain }: { chain: () => { focus: () => { insertContent: (content: Record<string, unknown>) => { run: () => boolean } } } }) => {
+              return chain()
+                .focus()
+                .insertContent({
+                  type: 'horizontalRule',
+                  attrs: { separatorStyle: style },
+                })
+                .run();
+            },
+          };
+        },
         addNodeView() {
-          return () => {
+          return ({ node }: { node: { attrs: Record<string, string> } }) => {
             const dom = document.createElement('div');
             dom.classList.add('scene-break');
-            dom.textContent = '* * *';
+            dom.textContent = node.attrs.separatorStyle || '* * *';
             dom.contentEditable = 'false';
             return { dom };
           };
