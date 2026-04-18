@@ -41,7 +41,7 @@ function generateId() {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
 }
 
-const AVATAR_EMOJIS = ['ð¤', 'ð©', 'ð¨', 'ð§', 'ð¦¸', 'ð§', 'ð¸', 'ð¤´', 'ð§', 'ð§', 'ð»', 'ð¤', 'ð§âð', 'ðµï¸', 'ð§âð¤', 'ð'];
+const AVATAR_EMOJIS: string[] = [];
 
 const ROLE_COLORS: Record<string, string> = {
   protagonist: 'bg-blue-500',
@@ -71,15 +71,15 @@ const RELATIONSHIP_TYPES: { value: RelationshipType; label: string; color: strin
 
 type ProfileTab = 'bio' | 'personality' | 'background' | 'arc' | 'voice' | 'genre' | 'relationships' | 'notes';
 
-const PROFILE_TABS: { id: ProfileTab; label: string; icon: string }[] = [
-  { id: 'bio', label: 'Bio', icon: 'ð' },
-  { id: 'personality', label: 'Personality', icon: 'ð§ ' },
-  { id: 'background', label: 'Background', icon: 'ð' },
-  { id: 'arc', label: 'Arc', icon: 'ð' },
-  { id: 'voice', label: 'Voice', icon: 'ð£ï¸' },
-  { id: 'genre', label: 'Genre', icon: 'ð­' },
-  { id: 'relationships', label: 'Relationships', icon: 'ð' },
-  { id: 'notes', label: 'Notes', icon: 'ð' },
+const PROFILE_TABS: { id: ProfileTab; label: string }[] = [
+  { id: 'bio', label: 'Bio' },
+  { id: 'personality', label: 'Personality' },
+  { id: 'background', label: 'Background' },
+  { id: 'arc', label: 'Arc' },
+  { id: 'voice', label: 'Voice' },
+  { id: 'genre', label: 'Genre' },
+  { id: 'relationships', label: 'Relationships' },
+  { id: 'notes', label: 'Notes' },
 ];
 
 // ============================================================================
@@ -150,7 +150,7 @@ function CharacterCard({
       }`}
     >
       <div className="flex items-center gap-3">
-        <div className="text-2xl">{character.avatar || 'ð¤'}</div>
+        <div className="text-2xl">{(character.name || 'U')[0].toUpperCase()}</div>
         <div className="flex-1 min-w-0">
           <div className="font-medium text-gray-900 dark:text-gray-100 truncate">{character.name || 'Unnamed'}</div>
           <div className="flex items-center gap-1.5 mt-0.5">
@@ -223,7 +223,7 @@ function RelationshipEditor({
         const relType = RELATIONSHIP_TYPES.find(t => t.value === rel.type);
         return (
           <div key={rel.id} className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-            <div className="text-xl">{other?.avatar || 'ð¤'}</div>
+            <div className="text-xl">{(other?.name || 'U')[0].toUpperCase()}</div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-sm text-gray-900 dark:text-gray-100">{other?.name || 'Unknown'}</div>
               <div className="flex items-center gap-1.5 mt-1">
@@ -261,7 +261,7 @@ function RelationshipEditor({
           >
             <option value="">Select a character...</option>
             {availableTargets.map(c => (
-              <option key={c.id} value={c.id}>{c.avatar || 'ð¤'} {c.name}</option>
+              <option key={c.id} value={c.id}>{c.avatar || ''} {c.name}</option>
             ))}
           </select>
           <select
@@ -326,7 +326,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
         // Migrate: ensure all new fields exist
         const migrated = old.map(c => ({
           ...c,
-          avatar: c.avatar || 'ð¤',
+          avatar: c.avatar || '',
           role: c.role || 'supporting',
           genreFields: c.genreFields || {}
         }));
@@ -358,7 +358,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
       projectId,
       name: '',
       role: 'supporting',
-      avatar: 'ð¤',
+      avatar: '',
       genreFields: {}
     };
     const updated = [...characters, newChar];
@@ -424,7 +424,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
         <div className="h-5 w-px bg-gray-200 dark:bg-gray-700" />
         <h1 className="text-sm font-semibold flex items-center gap-2">
           <Users className="w-4 h-4 text-blue-500" />
-          Characters â {project.title}
+          Characters - {project.title}
         </h1>
         <div className="flex-1" />
         <ThemeToggle />
@@ -489,7 +489,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                       className="text-4xl hover:opacity-80 transition-opacity"
                       title="Change avatar"
                     >
-                      {selected.avatar || 'ð¤'}
+                      {(selected.name || 'U')[0].toUpperCase()}
                     </button>
                     {showAvatarPicker && (
                       <div className="absolute top-full left-0 mt-2 p-2 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 grid grid-cols-4 gap-1 z-10">
@@ -552,7 +552,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                             : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                         }`}
                       >
-                        <span className="text-xs">{tab.icon}</span>
+                        
                         {tab.label}
                       </button>
                     );
@@ -596,7 +596,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                     <>
                       <ProfileField label="Goals" value={selected.goals || ''} onChange={(v) => updateCharacter(selected.id, { goals: v })} placeholder="What are they trying to achieve in this story?" multiline />
                       <ProfileField label="Motivation" value={selected.motivation || ''} onChange={(v) => updateCharacter(selected.id, { motivation: v })} placeholder="Why do they want what they want?" multiline />
-                      <ProfileField label="Internal Conflict" value={selected.internalConflict || ''} onChange={(v) => updateCharacter(selected.id, { internalConflict: v })} placeholder="The war inside them â what belief or desire conflicts with their goal?" multiline />
+                      <ProfileField label="Internal Conflict" value={selected.internalConflict || ''} onChange={(v) => updateCharacter(selected.id, { internalConflict: v })} placeholder="The war inside them  what belief or desire conflicts with their goal?" multiline />
                       <ProfileField label="External Conflict" value={selected.externalConflict || ''} onChange={(v) => updateCharacter(selected.id, { externalConflict: v })} placeholder="What outside forces oppose them?" multiline />
                       <ProfileField label="Character Arc" value={selected.arc || ''} onChange={(v) => updateCharacter(selected.id, { arc: v })} placeholder="How do they change from beginning to end? What do they learn (or fail to learn)?" multiline />
                     </>
@@ -645,7 +645,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                   )}
 
                   {activeTab === 'notes' && (
-                    <ProfileField label="Free Notes" value={selected.notes || ''} onChange={(v) => updateCharacter(selected.id, { notes: v })} placeholder="Anything else about this character â research notes, inspiration, deleted scenes, questions to resolve..." multiline />
+                    <ProfileField label="Free Notes" value={selected.notes || ''} onChange={(v) => updateCharacter(selected.id, { notes: v })} placeholder="Anything else about this character  research notes, inspiration, deleted scenes, questions to resolve..." multiline />
                   )}
                 </div>
               </div>
