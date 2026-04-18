@@ -1,14 +1,16 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useRef } from 'react'
-import { useEditor, EditorContent, Editor as TipTapEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
-import CharacterCount from '@tiptap/extension-character-count'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
-import TextAlign from '@tiptap/extension-text-align'
-import { Node, mergeAttributes } from '@tiptap/core'
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEditor, EditorContent, Editor as TipTapEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import CharacterCount from '@tiptap/extension-character-count';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import TextAlign from '@tiptap/extension-text-align';
+import { Extension } from '@tiptap/react';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import {
   Bold,
   Italic,
@@ -26,112 +28,221 @@ import {
   Link as LinkIcon,
   Undo2,
   Redo2,
-  Minus,
-} from 'lucide-react'
-import { useStore } from '@/lib/store'
+  Search,
+  X,
+  ChevronUp,
+  ChevronDown,
+} from 'lucide-react';
+import { useStore } from '@/lib/store';
+import AIToolbar from '@/components/AIToolbar';
 
-const DEBOUNCE_MS = 2000
+// ============================================================================
+// Search Highlight Extension
+// ============================================================================
 
-// Scene Break styles
-const SCENE_BREAK_STYLES = [
-  { id: 'asterisks', label: '* * *', symbol: '* * *' },
-  { id: 'dashes', label: '— — —', symbol: '— — —' },
-  { id: 'dots', label: '• • •', symbol: '• • •' },
-  { id: 'fleuron', label: '❧', symbol: '❧' },
-  { id: 'ornament', label: '⁂', symbol: '⁂' },
-]
+const searchHighlightKey = new PluginKey('searchHighlight');
 
-// Custom Scene Break extension
-const SceneBreak = Node.create({
-  name: 'sceneBreak',
-  group: 'block',
-  atom: true,
+function createSearchHighlightExtension() {
+  return Extension.create({
+    name: 'searchHighlight',
 
-  addAttributes() {
-    return {
-      style: {
-        default: 'asterisks',
-        parseHTML: element => element.getAttribute('data-scene-break-style') || 'asterisks',
-        renderHTML: attributes => ({
-          'data-scene-break-style': attributes.style,
+    addStorage() {
+      return {
+        searchTerm: '' as string,
+        activeIndex: 0,
+        totalMatches: 0,
+      };
+    },
+
+    addProseMirrorPlugins() {
+      const ext = this;
+      return [
+        new Plugin({
+          key: searchHighlightKey,
+          state: {
+            init() {
+              return DecorationSet.empty;
+            },
+            apply(tr, oldSet) {
+              const meta = tr.getMeta(searchHighlightKey);
+              if (meta !== undefined) {
+                const { searchTerm, activeIndex } = meta;
+                if (!searchTerm) {
+                  ext.storage.searchTerm = '';
+                  ext.storage.totalMatches = 0;
+                  ext.storage.activeIndex = 0;
+                  return DecorationSet.empty;
+                }
+
+                ext.storage.searchTerm = searchTerm;
+                const decorations: Decoration[] = [];
+                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+
+                tr.doc.descendants((node, pos) => {
+                  if (!node.isText || !node.text) return;
+                  let match;
+                  while ((match = regex.exec(node.text)) !== null) {
+                    const from = pos + match.index;
+                    const to = from + match[0].length;
+                    decorations.push(
+                      Decoration.inline(from, to, {
+                        class: decorations.length === activeIndex
+                          ? 'search-highlight-active'
+                          : 'search-highlight',
+                      })
+                    );
+                  }
+                });
+
+                ext.storage.totalMatches = decorations.length;
+                ext.storage.activeIndex = Math.min(activeIndex, Math.max(0, decorations.length - 1));
+                return DecorationSet.create(tr.doc, decorations);
+              }
+
+              // If doc changed, reapply
+              if (tr.docChanged && ext.storage.searchTerm) {
+                const searchTerm = ext.storage.searchTerm;
+                const decorations: Decoration[] = [];
+                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+
+                tr.doc.descendants((node, pos) => {
+                  if (!node.isText || !node.text) return;
+                  let match;
+                  while ((match = regex.exec(node.text)) !== null) {
+                    const from = pos + match.index;
+                    const to = from + match[0].length;
+                    decorations.push(
+                      Decoration.inline(from, to, {
+                        class: decorations.length === ext.storage.activeIndex
+                          ? 'search-highlight-active'
+                          : 'search-highlight',
+                      })
+                    );
+                  }
+                });
+
+                ext.storage.totalMatches = decorations.length;
+                return DecorationSet.create(tr.doc, decorations);
+              }
+
+              return tr.docChanged ? DecorationSet.empty : oldSet;
+            },
+          },
+          props: {
+            decorations(state) {
+              return this.getState(state);
+            },
+          },
         }),
-      },
+      ];
+    },
+  });
+}
+
+// ============================================================================
+// Search Bar Component
+// ============================================================================
+
+function SearchBar({ editor, searchTerm, onClose }: { editor: TipTapEditor; searchTerm: string; onClose: () => void }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const totalMatches = (editor.storage as any).searchHighlight?.totalMatches || 0;
+
+  // Apply search decorations
+  useEffect(() => {
+    if (!editor) return;
+    const tr = editor.state.tr;
+    tr.setMeta(searchHighlightKey, { searchTerm, activeIndex });
+    editor.view.dispatch(tr);
+  }, [editor, searchTerm, activeIndex]);
+
+  // Scroll to active match
+  useEffect(() => {
+    if (!editor || totalMatches === 0) return;
+    const decorations = searchHighlightKey.getState(editor.state);
+    if (!decorations) return;
+    const found = decorations.find();
+    if (found[activeIndex]) {
+      const pos = found[activeIndex].from;
+      const domAtPos = editor.view.domAtPos(pos);
+      if (domAtPos.node instanceof HTMLElement) {
+        domAtPos.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (domAtPos.node.parentElement) {
+        domAtPos.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
-  },
+  }, [editor, activeIndex, totalMatches]);
 
-  parseHTML() {
-    return [{ tag: 'div[data-scene-break]' }]
-  },
+  const goNext = useCallback(() => {
+    setActiveIndex(prev => (prev + 1) % Math.max(1, totalMatches));
+  }, [totalMatches]);
 
-  renderHTML({ HTMLAttributes }) {
-    const style = HTMLAttributes['data-scene-break-style'] || 'asterisks'
-    const found = SCENE_BREAK_STYLES.find(s => s.id === style)
-    const symbol = found ? found.symbol : '* * *'
-    return ['div', mergeAttributes(HTMLAttributes, {
-      'data-scene-break': '',
-      'data-scene-break-style': style,
-      class: 'scene-break',
-      contenteditable: 'false',
-    }), symbol]
-  },
+  const goPrev = useCallback(() => {
+    setActiveIndex(prev => (prev - 1 + Math.max(1, totalMatches)) % Math.max(1, totalMatches));
+  }, [totalMatches]);
 
-  addCommands() {
-    return {
-      setSceneBreak: (attrs: Record<string, string> = {}) => ({ commands }: any) => {
-        return commands.insertContent({
-          type: this.name,
-          attrs,
-        })
-      },
-    } as any
-  },
-})
+  const handleClose = useCallback(() => {
+    const tr = editor.state.tr;
+    tr.setMeta(searchHighlightKey, { searchTerm: '', activeIndex: 0 });
+    editor.view.dispatch(tr);
+    onClose();
+  }, [editor, onClose]);
 
-/**
- * Toolbar Component
- */
+  if (!searchTerm) return null;
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
+      <Search size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
+      <span className="text-sm font-medium text-[var(--color-accent)]">&ldquo;{searchTerm}&rdquo;</span>
+      <span className="text-xs text-[var(--color-text-muted)]">
+        {totalMatches > 0 ? `${activeIndex + 1}/${totalMatches}` : 'No matches'}
+      </span>
+      <div className="flex items-center gap-0.5 ml-auto">
+        <button onClick={goPrev} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Previous" disabled={totalMatches === 0}>
+          <ChevronUp size={14} />
+        </button>
+        <button onClick={goNext} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Next" disabled={totalMatches === 0}>
+          <ChevronDown size={14} />
+        </button>
+        <button onClick={handleClose} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Close search">
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const DEBOUNCE_MS = 2000;
+
+// ============================================================================
+// Toolbar Component
+// ============================================================================
 
 interface ToolbarProps {
-  editor: TipTapEditor | null
-  isHidden?: boolean
+  editor: TipTapEditor | null;
+  isHidden?: boolean;
 }
 
 function Toolbar({ editor, isHidden = false }: ToolbarProps) {
-  if (!editor || isHidden) return null
-  const [showBreakMenu, setShowBreakMenu] = useState(false)
-  const breakMenuRef = useRef<HTMLDivElement>(null)
-
-  // Close break menu on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (breakMenuRef.current && !breakMenuRef.current.contains(e.target as globalThis.Node)) {
-        setShowBreakMenu(false)
-      }
-    }
-    if (showBreakMenu) {
-      document.addEventListener('mousedown', handleClick)
-      return () => document.removeEventListener('mousedown', handleClick)
-    }
-  }, [showBreakMenu])
+  if (!editor || isHidden) return null;
 
   const handleLinkClick = () => {
-    const url = prompt('Enter URL:')
+    const url = prompt('Enter URL:');
     if (url) {
-      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     }
-  }
+  };
 
   const btn = (isActive: boolean) =>
     `p-1.5 rounded transition-colors ${
-    isActive
-      ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-primary)]'
-      : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
-    }`
+      isActive
+        ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-primary)]'
+        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+    }`;
 
-  const divider = 'w-px h-5 bg-[var(--color-border)] mx-0.5'
+  const divider = 'w-px h-5 bg-[var(--color-border)] mx-0.5';
 
   return (
-    <div className="flex items-center gap-0.5 px-4 py-2 border-b border-[var(--color-border)] flex-wrap">
+    <div className="flex items-center gap-0.5 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)] flex-shrink-0">
       <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="Bold" type="button">
         <Bold size={16} />
       </button>
@@ -159,7 +270,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
 
       <div className={divider} />
 
-      <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Quote" type="button">
+      <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Blockquote" type="button">
         <Quote size={16} />
       </button>
       <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Bullet List" type="button">
@@ -183,40 +294,9 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
 
       <div className={divider} />
 
-      <button onClick={handleLinkClick} className={btn(editor.isActive('link'))} title="Link" type="button">
+      <button onClick={handleLinkClick} className={btn(editor.isActive('link'))} title="Add Link" type="button">
         <LinkIcon size={16} />
       </button>
-
-      <div className={divider} />
-
-      {/* Scene Break dropdown */}
-      <div className="relative" ref={breakMenuRef}>
-        <button
-          onClick={() => setShowBreakMenu(!showBreakMenu)}
-          className={btn(editor.isActive('sceneBreak'))}
-          title="Scene Break"
-          type="button"
-        >
-          <Minus size={16} />
-        </button>
-        {showBreakMenu && (
-          <div className="absolute top-full left-0 mt-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 py-1 min-w-[140px]">
-            {SCENE_BREAK_STYLES.map((style) => (
-              <button
-                key={style.id}
-                onClick={() => {
-                  (editor.chain().focus() as any).setSceneBreak({ style: style.id }).run()
-                  setShowBreakMenu(false)
-                }}
-                className="w-full px-3 py-1.5 text-sm text-center hover:bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] transition-colors"
-                type="button"
-              >
-                {style.symbol}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
 
       <div className={divider} />
 
@@ -225,7 +305,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
         disabled={!editor.can().undo()}
         className={`p-1.5 rounded transition-colors ${
           editor.can().undo()
-            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
             : 'text-[var(--color-border)] cursor-not-allowed'
         }`}
         title="Undo"
@@ -238,7 +318,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
         disabled={!editor.can().redo()}
         className={`p-1.5 rounded transition-colors ${
           editor.can().redo()
-            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
+            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
             : 'text-[var(--color-border)] cursor-not-allowed'
         }`}
         title="Redo"
@@ -250,26 +330,29 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
   );
 }
 
-/**
- * Editor Component
- */
+// ============================================================================
+// Editor Component
+// ============================================================================
 
 interface EditorProps {
-  onSelectionChange?: (text: string) => void
-  hasActiveSelection?: boolean
-  onEditorReady?: (editor: TipTapEditor) => void
+  onSelectionChange?: (text: string) => void;
+  hasActiveSelection?: boolean;
 }
 
-export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }: EditorProps) {
+const SearchHighlight = createSearchHighlightExtension();
+
+export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
   const {
     currentScene,
     updateScene,
     focusMode,
-  } = useStore()
+    highlightWord,
+    setHighlightWord,
+  } = useStore();
 
-  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const selectionTimerRef = useRef<NodeJS.Timeout | null>(null)
-  const wordCountTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const selectionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wordCountTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const editor = useEditor({
     extensions: [
@@ -286,9 +369,7 @@ export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }:
         blockquote: {
           HTMLAttributes: { class: 'prose-blockquote' },
         },
-        horizontalRule: false,
       }),
-      SceneBreak,
       Placeholder.configure({
         placeholder: 'Begin writing...',
       }),
@@ -303,6 +384,7 @@ export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }:
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      SearchHighlight,
     ],
     content: currentScene?.content || '',
     editorProps: {
@@ -311,73 +393,75 @@ export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }:
       },
     },
     onUpdate: ({ editor }) => {
-      /* Immediate word count update (200ms) for responsive feel */
-      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current)
+      // Immediate word count update (200ms) for responsive feel
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
       wordCountTimerRef.current = setTimeout(() => {
         if (currentScene) {
-          const text = editor.getText()
-          const words = text.trim() ? text.trim().split(/\s+/).length : 0
-          updateScene(currentScene.id, { wordCount: words })
+          const text = editor.getText();
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          updateScene(currentScene.id, { wordCount });
         }
-      }, 200)
+      }, 200);
 
-      /* Debounced content save (2s) to avoid hammering store */
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
+      // Debounced full content save (2s)
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       debounceTimerRef.current = setTimeout(() => {
         if (currentScene) {
-          const html = editor.getHTML()
-          const text = editor.getText()
-          const words = text.trim() ? text.trim().split(/\s+/).length : 0
-          updateScene(currentScene.id, {
-            content: html,
-            wordCount: words,
-          })
+          const html = editor.getHTML();
+          const text = editor.getText();
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          updateScene(currentScene.id, { content: html, wordCount });
         }
-      }, DEBOUNCE_MS)
+      }, DEBOUNCE_MS);
     },
     onSelectionUpdate: ({ editor }) => {
-      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
-      selectionTimerRef.current = setTimeout(() => {
-        const { from, to } = editor.state.selection
-        if (from !== to) {
-          const text = editor.state.doc.textBetween(from, to, ' ')
-          onSelectionChange?.(text)
-        } else {
-          onSelectionChange?.('')
-        }
-      }, 150)
-    },
-  })
+      if (!onSelectionChange) return;
 
-  // Sync content when scene changes
+      // Debounce selection changes
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+
+      selectionTimerRef.current = setTimeout(() => {
+        const { from, to } = editor.state.selection;
+        if (from === to) {
+          onSelectionChange('');
+        } else {
+          const text = editor.state.doc.textBetween(from, to);
+          onSelectionChange(text.trim());
+        }
+      }, 300);
+    },
+  });
+
+  // Update editor content when scene changes
   useEffect(() => {
     if (editor && currentScene) {
-      const currentContent = editor.getHTML()
-      if (currentContent !== currentScene.content) {
-        editor.commands.setContent(currentScene.content || '')
+      const currentContent = editor.getHTML();
+      const newContent = currentScene.content || '';
+      if (currentContent !== newContent) {
+        editor.commands.setContent(newContent);
       }
     }
-  }, [currentScene?.id, editor])
-
-  // Notify parent when editor is ready
-  useEffect(() => {
-    if (editor && onEditorReady) {
-      onEditorReady(editor)
-    }
-  }, [editor, onEditorReady])
+  }, [editor, currentScene?.id]);
 
   // Cleanup
   useEffect(() => {
     return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current)
-      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current)
-      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current)
-    }
-  }, [])
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+    };
+  }, []);
 
   return (
-    <div className={`flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'has-selection' : ''}`}>
+    <div className={`flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'selection-focus-mode' : ''}`}>
       <Toolbar editor={editor} isHidden={focusMode} />
+      {editor && highlightWord && (
+        <SearchBar
+          editor={editor}
+          searchTerm={highlightWord}
+          onClose={() => setHighlightWord(null)}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto">
         {!currentScene ? (
@@ -387,13 +471,14 @@ export function Editor({ onSelectionChange, hasActiveSelection, onEditorReady }:
             </p>
           </div>
         ) : (
-          <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8 relative">
             <EditorContent editor={editor} />
+            <AIToolbar editor={editor} />
           </div>
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default Editor
+export default Editor;
