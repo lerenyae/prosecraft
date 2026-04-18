@@ -57,6 +57,7 @@ type SidebarSection = 'chapters' | 'characters' | 'storyboard';
 // ============================================================================
 
 function SortableChapterItem({
+  chapterIndex,
   chapter,
   isExpanded,
   showScenes: _showScenes,
@@ -70,6 +71,7 @@ function SortableChapterItem({
   currentSceneId,
   chapterWordCount,
 }: {
+  chapterIndex: number;
   chapter: Chapter;
   isExpanded: boolean;
   showScenes: boolean;
@@ -139,12 +141,14 @@ function SortableChapterItem({
 
         <Folder size={14} className={isActive ? 'text-[var(--color-accent)] flex-shrink-0' : 'text-[var(--color-text-muted)] flex-shrink-0'} />
 
-        <span className="flex-1 font-medium truncate">
-          {chapter.title}
-        </span>
-        <span className="text-[10px] text-[var(--color-text-muted)] flex-shrink-0">
-          {chapterWordCount(chapter.id) > 0 ? chapterWordCount(chapter.id).toLocaleString() : ''}
-        </span>
+        <div className="flex-1 min-w-0">
+          <span className="font-medium truncate block text-[12px]">Chapter {chapterIndex + 1}</span>
+          {chapterWordCount(chapter.id) > 0 && (
+            <span className="text-[10px] text-[var(--color-text-muted)] block mt-0.5">
+              {chapterWordCount(chapter.id).toLocaleString()} words
+            </span>
+          )}
+        </div>
 
         {/* Menu button */}
         <button
@@ -471,9 +475,10 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
           <>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChapterDragEnd}>
               <SortableContext items={projectChapters.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                {chaptersWithScenes.map(({ chapter, scenes }) => (
+                {chaptersWithScenes.map(({ chapter, scenes }, idx) => (
                   <div key={chapter.id} className="relative">
                     <SortableChapterItem
+                      chapterIndex={idx}
                       chapter={chapter}
                       isExpanded={expandedChapters[chapter.id] || false}
                       showScenes={scenes.length > 1}
