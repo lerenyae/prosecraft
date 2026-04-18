@@ -287,7 +287,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
         </button>
         {showBreakMenu && (
           <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 min-w-[100px]">
-            {['∗ ∗ ∗', '— — —', '~ ~ ~', '• • •', '❖'].map(label => (
+            {['* * *', '- - -', '~ ~ ~', '. . .', '# # #'].map(label => (
               <button
                 key={label}
                 onClick={() => { editor.chain().focus().setHorizontalRule().run(); setShowBreakMenu(false); }}
