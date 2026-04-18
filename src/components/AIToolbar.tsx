@@ -297,7 +297,7 @@ export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
             </div>
             <div>
               <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-1">Suggested</p>
-              <div className="p-2 bg-green-50 dark:bg-green-950/20 rounded text-xs text-[var(--color-text-primary)] font-medium leading-relaxed">
+              <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-xs text-[var(--color-text-primary)] font-medium leading-relaxed">
                 {response.suggestedText}
               </div>
             </div>
@@ -306,7 +306,7 @@ export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
           <div className="flex gap-2 p-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
             <button
               onClick={handleAccept}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-xs font-medium transition-colors"
+              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white rounded-md text-xs font-medium transition-colors"
             >
               <Check size={14} />
               Accept
