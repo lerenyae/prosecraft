@@ -116,11 +116,11 @@ export async function POST(request: NextRequest) {
       }
       systemPrompt = getChapterPrompt(genre);
     const positionContext = body.chapterNumber && body.totalChapters
-        ? `[This is chapter ${String.fromCharCode(36)}{body.chapterNumber} of ${String.fromCharCode(36)}{body.totalChapters} in the manuscript]\n\n`
+        ? `[This is chapter ${body.chapterNumber} of ${body.totalChapters} in the manuscript]\n\n`
         : '';
       userPrompt = body.chapterTitle
-        ? `${String.fromCharCode(36)}{positionContext}Chapter: "${String.fromCharCode(36)}{body.chapterTitle}"\n\n${String.fromCharCode(36)}{plainText}`
-        : `${String.fromCharCode(36)}{positionContext}${String.fromCharCode(36)}{plainText}`;
+        ? `${positionContext}Chapter: "${body.chapterTitle}"\n\n${plainText}`
+        : `${positionContext}${plainText}`;
     }
 
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
