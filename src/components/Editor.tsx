@@ -28,6 +28,7 @@ import {
   Link as LinkIcon,
   Undo2,
   Redo2,
+  Minus,
   Search,
   X,
   ChevronUp,
@@ -278,6 +279,9 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
       </button>
       <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Ordered List" type="button">
         <ListOrdered size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().setHorizontalRule().run()} className={btn(editor.isActive('horizontalRule'))} title="Scene Break" type="button">
+        <Minus size={16} />
       </button>
 
       <div className={divider} />
