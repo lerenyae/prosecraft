@@ -291,7 +291,7 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
             {['* * *', '- - -', '~ ~ ~', '. . .', '# # #'].map(label => (
               <button
                 key={label}
-                onClick={() => { (editor.commands as Record<string, (style: string) => boolean>).setStyledHorizontalRule(label); setShowBreakMenu(false); }}
+                onClick={() => { (editor.commands as unknown as Record<string, (style: string) => boolean>).setStyledHorizontalRule(label); setShowBreakMenu(false); }}
                 type="button"
                 className="w-full px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] text-center transition-colors"
               >
