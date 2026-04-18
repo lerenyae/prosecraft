@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useReducer,
+  useState,
   useCallback,
   useEffect,
   useMemo,
@@ -74,6 +75,10 @@ interface StoreContextValue extends StoreState {
   toggleDarkMode: () => void;
   toggleSidebar: () => void;
   toggleFocusMode: () => void;
+
+  // Highlight / search
+  highlightWord: string | null;
+  setHighlightWord: (word: string | null) => void;
 
   // Computed values
   currentProject: Project | null;
@@ -298,25 +303,9 @@ function saveStateToStorage(state: StoreState): void {
 // Provider Component
 // ============================================================================
 
-
-// Helper: generate next unique chapter title for a project
-function getNextChapterTitle(projectId: string): string {
-  const chapters = JSON.parse(safeGetItem('prosecraft-chapters') || '{}');
-  const projectChapters = Object.values(chapters).filter(
-    (c: any) => c.projectId === projectId
-  );
-  const existingNums = projectChapters
-    .map((c: any) => {
-      const match = c.title.match(/^Chapter\s+(\d+)$/i);
-      return match ? parseInt(match[1], 10) : 0;
-    })
-    .filter((n: number) => n > 0);
-  const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
-  return `Chapter ${nextNum}`;
-}
-
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(storeReducer, initialState);
+  const [highlightWord, setHighlightWord] = useState<string | null>(null);
   // Hydrate from localStorage on mount (client-side only)
   useEffect(() => {
     const stored = loadStateFromStorage();
@@ -365,7 +354,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chapter: Chapter = {
         id: chapterId,
         projectId,
-        title: getNextChapterTitle(projectId),
+        title: 'Chapter 1',
         sortOrder: 0,
         createdAt: now,
       };
@@ -783,6 +772,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     toggleDarkMode,
     toggleSidebar,
     toggleFocusMode,
+    highlightWord,
+    setHighlightWord,
   };
 
   return (
