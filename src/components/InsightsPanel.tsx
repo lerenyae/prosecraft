@@ -275,29 +275,24 @@ export default function InsightsPanel({ onFilterWordClick }: { onFilterWordClick
         </div>
       </div>
 
-      {/* Chapter Breakdown */}
-      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-        <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-3">Chapters</p>
-        <div className="flex flex-col gap-2">
-          {projectChapters.map(ch => {
-            const wc = chapterWordCount(ch.id);
-            const chPct = goal > 0 ? Math.min(100, Math.round((wc / (goal / Math.max(projectChapters.length, 1))) * 100)) : 0;
-            return (
-              <div key={ch.id} className="flex items-center gap-2">
-                <span className="text-xs text-[var(--color-text-secondary)] w-24 truncate flex-shrink-0">{ch.title}</span>
-                <div className="flex-1 h-1.5 bg-[var(--color-border)] rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[var(--color-accent)] rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, chPct)}%` }}
-                  />
-                </div>
-                <span className="text-xs text-[var(--color-text-muted)] w-12 text-right flex-shrink-0">
-                  {wc.toLocaleString()}
-                </span>
-              </div>
-            );
-          })}
+      {/* Chapter Summary */}
+      <div className="p-3 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BookOpen size={14} className="text-[var(--color-accent)]" />
+            <span className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Chapters</span>
+          </div>
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{projectChapters.length}</span>
         </div>
+        {projectChapters.length > 0 && (
+          <div className="mt-2 flex items-center gap-2 text-[10px] text-[var(--color-text-muted)]">
+            <span>Avg: {Math.round(projectWordCount / projectChapters.length).toLocaleString()} words/ch</span>
+            <span>·</span>
+            <span>Longest: {Math.max(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString()}</span>
+            <span>·</span>
+            <span>Shortest: {Math.min(...projectChapters.map(ch => chapterWordCount(ch.id))).toLocaleString()}</span>
+          </div>
+        )}
       </div>
 
       {/* Most Used Words */}
