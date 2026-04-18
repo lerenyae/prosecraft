@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useEditor, EditorContent, Editor as TipTapEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import HorizontalRule from '@tiptap/extension-horizontal-rule';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import Underline from '@tiptap/extension-underline';
@@ -378,6 +379,7 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        horizontalRule: false,
         paragraph: {
           HTMLAttributes: { class: 'prose-paragraph' },
         },
@@ -406,6 +408,17 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
         types: ['heading', 'paragraph'],
       }),
       SearchHighlight,
+      HorizontalRule.extend({
+        addNodeView() {
+          return () => {
+            const dom = document.createElement('div');
+            dom.classList.add('scene-break');
+            dom.textContent = '* * *';
+            dom.contentEditable = 'false';
+            return { dom };
+          };
+        },
+      }),
     ],
     content: currentScene?.content || '',
     editorProps: {
