@@ -1,37 +1,31 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef, use } from 'react';
+import { useEffect, useState, useCallback, use } from 'react';
 import Link from 'next/link';
 import { useStore } from '@/lib/store';
-import { Editor as TipTapEditor } from '@tiptap/react';
 import {
   Menu,
   Eye,
   BarChart3,
   Brain,
+  MessageSquare,
   Settings,
   BookOpen,
   PenTool,
   Download,
-  Search,
-  FileText,
-  FileType,
-  ChevronDown,
-  Sparkles,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
 import ThemeToggle from '@/components/ThemeToggle';
 import InsightsPanel from '@/components/InsightsPanel';
 import BetaReaderPanel from '@/components/BetaReaderPanel';
-import AIToolbar from '@/components/AIToolbar';
-import SearchReplace from '@/components/SearchReplace';
+import ChatPanel from '@/components/ChatPanel';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type PanelTab = 'insights' | 'beta-reader' | 'ai-tools';
+type PanelTab = 'insights' | 'beta-reader' | 'chat';
 
 interface ProjectPageProps {
   params: Promise<{
@@ -184,9 +178,9 @@ function ToolStrip({
   onTabChange: (tab: PanelTab | null) => void;
 }) {
   const tools: { id: PanelTab; icon: typeof BarChart3; label: string }[] = [
-    { id: 'ai-tools', icon: Sparkles, label: 'AI Tools' },
     { id: 'insights', icon: BarChart3, label: 'Insights' },
     { id: 'beta-reader', icon: Brain, label: 'Beta Reader' },
+    { id: 'chat', icon: MessageSquare, label: 'Chat' },
   ];
 
   return (
@@ -228,39 +222,33 @@ function ToolStrip({
 function RightPanel({
   activeTab,
   selectedText,
-  editor,
   onAnnotationClick,
-  onFilterWordClick,
 }: {
   activeTab: PanelTab | null;
   selectedText: string;
-  editor: TipTapEditor | null;
   onAnnotationClick: (quote: string) => void;
-  onFilterWordClick?: (word: string) => void;
 }) {
   if (!activeTab) return null;
-
-  const panelTitle = activeTab === 'insights' ? 'Insights' : activeTab === 'ai-tools' ? 'AI Tools' : 'Beta Reader';
 
   return (
     <div className="flex-shrink-0 w-[320px] border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col overflow-hidden">
       {/* Panel Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)] flex-shrink-0">
         <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-          {panelTitle}
+          {activeTab === 'insights' ? 'Insights' : activeTab === 'beta-reader' ? 'Beta Reader' : 'Chat'}
         </span>
       </div>
 
       {/* Panel Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {activeTab === 'ai-tools' && <AIToolbar editor={editor} selectedText={selectedText} />}
-        {activeTab === 'insights' && <InsightsPanel onFilterWordClick={onFilterWordClick} />}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'insights' && <InsightsPanel />}
         {activeTab === 'beta-reader' && (
           <BetaReaderPanel
             selectedText={selectedText}
             onAnnotationClick={onAnnotationClick}
           />
         )}
+        {activeTab === 'chat' && <ChatPanel />}
       </div>
     </div>
   );
@@ -287,54 +275,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
   const [showGoalSettings, setShowGoalSettings] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchInitialTerm, setSearchInitialTerm] = useState('');
-  const [showExportMenu, setShowExportMenu] = useState(false);
-  const [editorInstance, setEditorInstance] = useState<TipTapEditor | null>(null);
-  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
   }, [resolvedParams.id, setCurrentProject]);
 
-  // Close export menu on click outside
-  useEffect(() => {
-    if (!showExportMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setShowExportMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showExportMenu]);
-
-  const handleFilterWordClick = useCallback((word: string) => {
-    setSearchInitialTerm(word);
-    setShowSearch(true);
-  }, []);
-
-  // Keyboard shortcut: Cmd+F for search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        e.preventDefault();
-        setShowSearch(true);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
-  const handleEditorReady = useCallback((editor: TipTapEditor) => {
-    setEditorInstance(editor);
-  }, []);
-
   const handleSelectionChange = useCallback((text: string) => {
     setSelectedText(text);
-    // Auto-open AI tools panel when text is selected (only if no panel is open)
-    if (text.length > 10 && activePanel === null) {
-      setActivePanel('ai-tools');
+    // Auto-switch to beta reader when text is selected
+    if (text.length > 10 && activePanel !== 'beta-reader') {
+      setActivePanel('beta-reader');
     }
   }, [activePanel]);
 
@@ -349,21 +299,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }, [currentProject, updateProject]);
 
-  // Build manuscript data for export
-  const getManuscriptData = useCallback(() => {
-    if (!currentProject) return { text: '', html: '', chapters: [] as { title: string; html: string; text: string }[] };
+  const handleExport = useCallback(async () => {
+    if (!currentProject) return;
 
-    let text = `${currentProject.title}\n\n`;
-    let html = `<h1>${currentProject.title}</h1>`;
-    const chapters: { title: string; html: string; text: string }[] = [];
-
+    // Build full manuscript text
+    let manuscript = `${currentProject.title}\n\n`;
     projectChapters.forEach((chapter) => {
-      let chapterText = '';
-      let chapterHtml = '';
+      manuscript += `\n\n${chapter.title}\n\n`;
       const scenes = chapterScenes(chapter.id);
       scenes.forEach((scene) => {
-        chapterHtml += scene.content || '';
-        const sceneText = (scene.content || '')
+        const text = scene.content
           .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
           .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
           .replace(/<br\s*\/?>/gi, '\n')
@@ -375,20 +320,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           .replace(/&quot;/g, '"')
           .replace(/&#039;/g, "'")
           .replace(/\n{3,}/g, '\n\n');
-        chapterText += sceneText;
+        manuscript += text;
       });
-      chapters.push({ title: chapter.title, html: chapterHtml, text: chapterText });
-      text += `\n\n${chapter.title}\n\n${chapterText}`;
-      html += `<h2>${chapter.title}</h2>${chapterHtml}`;
     });
 
-    return { text, html, chapters };
-  }, [currentProject, projectChapters, chapterScenes]);
-
-  const handleExportTxt = useCallback(() => {
-    if (!currentProject) return;
-    const { text } = getManuscriptData();
-    const blob = new Blob([text], { type: 'text/plain' });
+    // Download as .txt
+    const blob = new Blob([manuscript], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -397,72 +334,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }, [currentProject, getManuscriptData]);
-
-  const handleExportPdf = useCallback(() => {
-    if (!currentProject) return;
-    const { html } = getManuscriptData();
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`<!DOCTYPE html><html><head><title>${currentProject.title}</title>
-      <style>
-        body { font-family: Georgia, 'Times New Roman', serif; max-width: 6.5in; margin: 1in auto; line-height: 1.8; color: #1a1a1a; font-size: 12pt; }
-        h1 { text-align: center; font-size: 24pt; margin-bottom: 2em; page-break-after: avoid; }
-        h2 { font-size: 18pt; margin-top: 2em; page-break-after: avoid; }
-        h3 { font-size: 14pt; page-break-after: avoid; }
-        p { margin: 0 0 0.8em 0; text-indent: 1.5em; }
-        p:first-child, h1 + p, h2 + p, h3 + p { text-indent: 0; }
-        blockquote { margin: 1em 2em; font-style: italic; border-left: 3px solid #ccc; padding-left: 1em; }
-        @media print { body { margin: 0; } }
-      </style></head><body>${html}</body></html>`);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => printWindow.print(), 500);
-  }, [currentProject, getManuscriptData]);
-
-  const handleExportDocx = useCallback(async () => {
-    if (!currentProject) return;
-    const { chapters } = getManuscriptData();
-
-    const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType } = await import('docx');
-    const { saveAs } = await import('file-saver');
-
-    const docChildren: any[] = [
-      new Paragraph({
-        text: currentProject.title,
-        heading: HeadingLevel.TITLE,
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 600 },
-      }),
-    ];
-
-    chapters.forEach((ch) => {
-      docChildren.push(
-        new Paragraph({
-          text: ch.title,
-          heading: HeadingLevel.HEADING_1,
-          spacing: { before: 400, after: 200 },
-        })
-      );
-      // Split chapter text into paragraphs
-      const paras = ch.text.split(/\n\n+/).filter((p: string) => p.trim());
-      paras.forEach((p: string) => {
-        docChildren.push(
-          new Paragraph({
-            children: [new TextRun({ text: p.trim(), font: 'Times New Roman', size: 24 })],
-            spacing: { after: 200, line: 360 },
-          })
-        );
-      });
-    });
-
-    const doc = new Document({
-      sections: [{ properties: {}, children: docChildren }],
-    });
-
-    const blob = await Packer.toBlob(doc);
-    saveAs(blob, `${currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.docx`);
-  }, [currentProject, getManuscriptData]);
+  }, [currentProject, projectChapters, chapterScenes]);
 
   if (!currentProject) {
     return (
@@ -548,51 +420,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </span>
               </button>
 
-              {/* Search */}
-              <button
-                onClick={() => setShowSearch(!showSearch)}
-                className={`p-2 rounded-lg transition-colors ${showSearch ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]' : 'hover:bg-[var(--color-surface-alt)]'}`}
-                title="Search & Replace (Cmd+F)"
-              >
-                <Search className="w-4 h-4" />
-              </button>
-
               {/* Export */}
-              <div ref={exportRef} className="relative">
-                <button
-                  onClick={() => setShowExportMenu(!showExportMenu)}
-                  className={`flex items-center gap-1 p-2 rounded-lg transition-colors ${showExportMenu ? 'bg-[var(--color-accent-light)] text-[var(--color-accent)]' : 'hover:bg-[var(--color-surface-alt)]'}`}
-                  title="Export manuscript"
-                >
-                  <Download className="w-4 h-4" />
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-                {showExportMenu && (
-                  <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-xl z-50 overflow-hidden">
-                    <button
-                      onClick={() => { handleExportTxt(); setShowExportMenu(false); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-                    >
-                      <FileText className="w-4 h-4 text-[var(--color-text-muted)]" />
-                      Plain Text (.txt)
-                    </button>
-                    <button
-                      onClick={() => { handleExportPdf(); setShowExportMenu(false); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-                    >
-                      <FileType className="w-4 h-4 text-red-500" />
-                      PDF (.pdf)
-                    </button>
-                    <button
-                      onClick={() => { handleExportDocx(); setShowExportMenu(false); }}
-                      className="flex items-center gap-2.5 w-full px-3 py-2.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] transition-colors"
-                    >
-                      <FileType className="w-4 h-4 text-blue-500" />
-                      Word (.docx)
-                    </button>
-                  </div>
-                )}
-              </div>
+              <button
+                onClick={handleExport}
+                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
+                title="Export manuscript"
+              >
+                <Download className="w-4 h-4" />
+              </button>
 
               {/* Goal Settings */}
               <button
@@ -639,9 +474,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         )}
 
         {/* Editor */}
-        <div className="flex-1 overflow-hidden relative">
-          <SearchReplace editor={editorInstance} isOpen={showSearch} onClose={() => { setShowSearch(false); setSearchInitialTerm(''); }} initialTerm={searchInitialTerm} />
-          <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} onEditorReady={handleEditorReady} />
+        <div className="flex-1 overflow-hidden">
+          <Editor onSelectionChange={handleSelectionChange} hasActiveSelection={selectedText.length > 10} />
         </div>
 
         {/* Right Panel */}
@@ -650,9 +484,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             <RightPanel
               activeTab={activePanel}
               selectedText={selectedText}
-              editor={editorInstance}
               onAnnotationClick={handleAnnotationClick}
-              onFilterWordClick={handleFilterWordClick}
             />
             <ToolStrip
               activeTab={activePanel}
