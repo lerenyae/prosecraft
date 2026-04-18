@@ -77,13 +77,13 @@ const SceneBreak = Node.create({
 
   addCommands() {
     return {
-      setSceneBreak: (attrs = {}) => ({ commands }) => {
+      setSceneBreak: (attrs: Record<string, string> = {}) => ({ commands }: any) => {
         return commands.insertContent({
           type: this.name,
           attrs,
         })
       },
-    }
+    } as any
   },
 })
 
