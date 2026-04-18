@@ -34,7 +34,7 @@ type ToneOption = 'formal' | 'casual' | 'dark' | 'lyrical' | 'humorous';
 
 interface AIToolbarProps {
   editor: TipTapEditor | null;
-  selectedText: string;
+  selectedText?: string;
 }
 
 interface DiffResponse {
