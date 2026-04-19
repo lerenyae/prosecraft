@@ -152,7 +152,7 @@ export interface Location {
   significance?: string; // why it matters to the story
   sensoryDetails?: string; // sights, sounds, smells
   notes?: string;
-  parentLocationId?: string; // for nested locations (building → room)
+  parentLocationId?: string; // for nested locations (building â room)
 }
 
 // --- Storyboard / Plot Types ---
@@ -314,6 +314,88 @@ export const CHARACTER_ROLE_OPTIONS: { value: CharacterRole; label: string; desc
   { value: 'supporting', label: 'Supporting', description: 'Important but secondary role' },
   { value: 'minor', label: 'Minor', description: 'Brief or background appearances' },
 ];
+
+// --- Story Intelligence Types ---
+
+export type ArcPhase = 'setup' | 'rising' | 'crisis' | 'climax' | 'resolution';
+
+export interface CharacterChapterPresence {
+  characterId: string;
+  chapterId: string;
+  role: 'pov' | 'active' | 'mentioned' | 'absent';
+  arcPhase?: ArcPhase;
+  notes?: string;
+}
+
+export interface StoryThread {
+  id: string;
+  projectId: string;
+  name: string;
+  color: string; // hex color for UI
+  type: 'plot' | 'character' | 'theme' | 'subplot';
+  status: 'active' | 'resolved' | 'dropped';
+  introducedChapterId?: string;
+  resolvedChapterId?: string;
+  linkedBeatTypes?: BeatType[];
+  linkedCharacterIds?: string[];
+  description?: string;
+  createdAt: Date;
+}
+
+export interface ConsistencyAlert {
+  id: string;
+  type: 'character-drift' | 'plot-hole' | 'thread-dropped' | 'arc-stall' | 'beat-missing' | 'pacing';
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  description: string;
+  relatedCharacterId?: string;
+  relatedChapterId?: string;
+  relatedBeatType?: BeatType;
+  relatedThreadId?: string;
+  dismissed?: boolean;
+}
+
+export interface StoryContext {
+  // Current position in story
+  totalChapters: number;
+  currentChapterIndex: number;
+  progressPercent: number;
+  totalWordCount: number;
+
+  // Characters active at this point
+  activeCharacters: {
+    character: Character;
+    arcPhase: ArcPhase;
+    lastSeenChapter: string;
+    chaptersSinceLastAppearance: number;
+  }[];
+
+  // Beat alignment
+  currentBeat: {
+    beatType: BeatType;
+    label: string;
+    description: string;
+    percentOfStory: number;
+  } | null;
+  nextBeat: {
+    beatType: BeatType;
+    label: string;
+    description: string;
+    percentOfStory: number;
+  } | null;
+  completedBeats: PlotBeat[];
+  upcomingBeats: { beatType: BeatType; label: string; description: string; percentOfStory: number }[];
+
+  // Active threads
+  activeThreads: StoryThread[];
+  resolvedThreads: StoryThread[];
+
+  // Alerts
+  alerts: ConsistencyAlert[];
+
+  // For AI context injection
+  narrativeSummary: string;
+}
 
 export const BEAT_SHEET_TEMPLATES: BeatSheetTemplate[] = [
   {
