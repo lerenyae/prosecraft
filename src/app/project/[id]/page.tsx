@@ -9,6 +9,7 @@ import {
   BarChart3,
   Brain,
   MessageSquare,
+  Activity,
   Settings,
   BookOpen,
   PenTool,
@@ -20,12 +21,13 @@ import ThemeToggle from '@/components/ThemeToggle';
 import InsightsPanel from '@/components/InsightsPanel';
 import BetaReaderPanel from '@/components/BetaReaderPanel';
 import ChatPanel from '@/components/ChatPanel';
+import StoryIntelPanel from '@/components/StoryIntelPanel';
 
 // ============================================================================
 // Types
 // ============================================================================
 
-type PanelTab = 'insights' | 'beta-reader' | 'chat';
+type PanelTab = 'insights' | 'beta-reader' | 'chat' | 'story-intel';
 
 interface ProjectPageProps {
   params: Promise<{
@@ -178,6 +180,7 @@ function ToolStrip({
   onTabChange: (tab: PanelTab | null) => void;
 }) {
   const tools: { id: PanelTab; icon: typeof BarChart3; label: string }[] = [
+    { id: 'story-intel', icon: Activity, label: 'Story Intelligence' },
     { id: 'insights', icon: BarChart3, label: 'Insights' },
     { id: 'beta-reader', icon: Brain, label: 'Beta Reader' },
     { id: 'chat', icon: MessageSquare, label: 'Chat' },
@@ -235,12 +238,13 @@ function RightPanel({
       {/* Panel Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)] flex-shrink-0">
         <span className="text-sm font-semibold text-[var(--color-text-primary)]">
-          {activeTab === 'insights' ? 'Insights' : activeTab === 'beta-reader' ? 'Beta Reader' : 'Chat'}
+          {activeTab === 'story-intel' ? 'Story Intelligence' : activeTab === 'insights' ? 'Insights' : activeTab === 'beta-reader' ? 'Beta Reader' : 'Chat'}
         </span>
       </div>
 
       {/* Panel Content */}
       <div className="flex-1 overflow-hidden">
+        {activeTab === 'story-intel' && <StoryIntelPanel />}
         {activeTab === 'insights' && <InsightsPanel />}
         {activeTab === 'beta-reader' && (
           <BetaReaderPanel
