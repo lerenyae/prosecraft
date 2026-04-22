@@ -1,9 +1,28 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { Plus, Calendar, PenTool, Upload, Trash2 } from 'lucide-react';
+
+// Calculate word count for a specific project by reading chapters/scenes from localStorage
+function getProjectWordCount(projectId: string): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const chapters = JSON.parse(localStorage.getItem('prosecraft-chapters') || '{}');
+    const scenes = JSON.parse(localStorage.getItem('prosecraft-scenes') || '{}');
+
+    const projectChapterIds = Object.values(chapters)
+      .filter((c: any) => c.projectId === projectId)
+      .map((c: any) => c.id);
+
+    return Object.values(scenes)
+      .filter((s: any) => projectChapterIds.includes(s.chapterId))
+      .reduce((sum: number, s: any) => sum + (s.wordCount || 0), 0);
+  } catch {
+    return 0;
+  }
+}
 import ThemeToggle from '@/components/ThemeToggle';
 
 const GENRE_OPTIONS = [
@@ -33,6 +52,16 @@ export default function Dashboard() {
   const [importFileName, setImportFileName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Calculate word counts for all projects
+  const wordCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    projects.forEach(p => {
+      counts[p.id] = getProjectWordCount(p.id);
+    });
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projects]);
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -299,7 +328,7 @@ export default function Dashboard() {
                   {/* Stats */}
                   <div className="space-y-3 border-t border-[var(--color-border-light)] pt-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl font-semibold text-[var(--color-accent)]">0</span>
+                      <span className="text-2xl font-semibold text-[var(--color-accent)]">{(wordCounts[project.id] || 0).toLocaleString()}</span>
                       <span className="text-sm text-[var(--color-text-secondary)]">words</span>
                     </div>
 
