@@ -23,9 +23,12 @@ function stripHtml(html: string): string {
 
 function getChapterPrompt(genre?: string): string {
   const g = genre ? `a ${genre} manuscript` : 'a manuscript';
-  return `You are a sharp, experienced beta reader analyzing a chapter of ${g}. You read like a trusted friend who also happens to be a professional editor — honest, specific, and constructive.
+  return `You are a sharp, experienced beta reader analyzing a chapter of ${g}.
+
+You read like a trusted friend who also happens to be a professional editor — honest, specific, and constructive.
 
 Analyze the chapter and return annotations in this exact JSON format:
+
 {
   "annotations": [
     {
@@ -62,9 +65,12 @@ Rules:
 
 function getSelectionPrompt(genre?: string): string {
   const g = genre ? `a ${genre} manuscript` : 'a manuscript';
-  return `You are a sharp beta reader giving focused feedback on a specific passage from ${g}. The writer highlighted this text and asked "what do you think?"
+  return `You are a sharp beta reader giving focused feedback on a specific passage from ${g}.
+
+The writer highlighted this text and asked "what do you think?"
 
 Analyze the selected passage and return feedback in this exact JSON format:
+
 {
   "annotations": [
     {
@@ -92,7 +98,13 @@ Rules:
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as AnalyzeRequest;
+    let body: AnalyzeRequest;
+    try {
+      body = (await request.json()) as AnalyzeRequest;
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+
     const { mode, genre } = body;
 
     let systemPrompt: string;
@@ -115,7 +127,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Chapter content is empty' }, { status: 400 });
       }
       systemPrompt = getChapterPrompt(genre);
-    const positionContext = body.chapterNumber && body.totalChapters
+      const positionContext = body.chapterNumber && body.totalChapters
         ? `[This is chapter ${body.chapterNumber} of ${body.totalChapters} in the manuscript]\n\n`
         : '';
       userPrompt = body.chapterTitle
@@ -142,7 +154,16 @@ export async function POST(request: NextRequest) {
     else if (jsonString.startsWith('```')) jsonString = jsonString.slice(3);
     if (jsonString.endsWith('```')) jsonString = jsonString.slice(0, -3);
 
-    const result = JSON.parse(jsonString.trim());
+    let result;
+    try {
+      result = JSON.parse(jsonString.trim());
+    } catch {
+      console.error('Failed to parse AI response as JSON:', jsonString.substring(0, 500));
+      return NextResponse.json(
+        { error: 'AI returned invalid response format. Please try again.' },
+        { status: 502 }
+      );
+    }
 
     // Add IDs to annotations
     result.annotations = (result.annotations || []).map((a: any, i: number) => ({
@@ -153,11 +174,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error in analyze route:', error);
-
-    if (error instanceof SyntaxError) {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
-    }
-
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }
