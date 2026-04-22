@@ -44,11 +44,13 @@ function GoalSettingsModal({
   onClose,
   project,
   onSave,
+  projectWordCount = 0,
 }: {
   isOpen: boolean;
   onClose: () => void;
   project: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number };
   onSave: (updates: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number }) => void;
+  projectWordCount?: number;
 }) {
   const [goal, setGoal] = useState(project.wordCountGoal);
   const [deadline, setDeadline] = useState(project.goalDeadline || '');
@@ -62,15 +64,17 @@ function GoalSettingsModal({
     }
   }, [isOpen, project]);
 
-  // Auto-calculate daily goal from deadline
+  // Auto-calculate daily goal from deadline, accounting for words already written
   useEffect(() => {
     if (deadline && goal) {
       const today = new Date();
       const end = new Date(deadline);
       const daysLeft = Math.max(1, Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-      setDailyGoal(Math.ceil(goal / daysLeft));
+      // Use projectWordCount to calculate remaining words, not total
+      const remaining = Math.max(0, goal - (projectWordCount || 0));
+      setDailyGoal(Math.ceil(remaining / daysLeft));
     }
-  }, [deadline, goal]);
+  }, [deadline, goal, projectWordCount]);
 
   if (!isOpen) return null;
 
@@ -136,7 +140,7 @@ function GoalSettingsModal({
           />
           {deadline && (
             <p className="text-[10px] text-[var(--color-text-muted)] mt-1">
-              Auto-calculated from deadline. Adjust manually if needed.
+              Auto-calculated from deadline ({Math.max(0, goal - projectWordCount).toLocaleString()} words remaining). Adjust manually if needed.
             </p>
           )}
         </label>
@@ -266,7 +270,10 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const resolvedParams = use(params);
   const {
     setCurrentProject,
+    setCurrentChapter,
+    setCurrentScene,
     currentProject,
+    currentSceneId,
     updateProject,
     toggleSidebar,
     sidebarOpen,
@@ -283,6 +290,18 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
   }, [resolvedParams.id, setCurrentProject]);
+
+  // Auto-select first chapter + first scene when project loads and nothing is selected
+  useEffect(() => {
+    if (currentProject && projectChapters.length > 0 && !currentSceneId) {
+      const firstChapter = projectChapters[0];
+      const firstScenes = chapterScenes(firstChapter.id);
+      if (firstScenes.length > 0) {
+        setCurrentChapter(firstChapter.id);
+        setCurrentScene(firstScenes[0].id);
+      }
+    }
+  }, [currentProject?.id, projectChapters.length, currentSceneId]);
 
   const handleSelectionChange = useCallback((text: string) => {
     setSelectedText(text);
@@ -367,6 +386,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         onClose={() => setShowGoalSettings(false)}
         project={currentProject as any}
         onSave={handleGoalSave}
+        projectWordCount={projectWordCount}
       />
 
       {/* Top Bar */}
