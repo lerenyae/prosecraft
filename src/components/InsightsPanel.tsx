@@ -38,6 +38,13 @@ function getTopWords(text: string, count: number = 10): { word: string; count: n
     'just', 'as', 'from', 'up', 'out', 'about', 'into', 'over', 'after',
     'all', 'also', 'how', 'each', 'both', 'more', 'when', 'where', 'there',
     'here', 'very', 'even', 'back', 'down', 'still', 'through', 'own',
+    'said', 'like', 'didn', 'don', 'won', 'isn', 'wasn', 'aren', 'weren',
+    'couldn', 'wouldn', 'shouldn', 'didn\'t', 'don\'t', 'won\'t', 'can\'t',
+    'without', 'enough', 'before', 'while', 'because', 'until', 'again',
+    'between', 'other', 'another', 'any', 'some', 'much', 'many', 'most',
+    'only', 'same', 'too', 'now', 'one', 'two', 'new', 'way', 'get',
+    'got', 'make', 'made', 'know', 'knew', 'come', 'came', 'take', 'took',
+    'see', 'saw', 'been', 'going', 'went', 'want', 'tell', 'told',
   ]);
 
   const words = text.toLowerCase().replace(/[^a-z\s'-]/g, '').split(/\s+/).filter(w => w.length > 2 && !stopWords.has(w));
@@ -157,7 +164,7 @@ export default function InsightsPanel() {
     }
   }, [currentProject, allText, projectChapters, chapterScenes]);
 
-  // Quick Scan — runs on current chapter
+  // Quick Scan â runs on current chapter
   const runQuickScan = useCallback(async () => {
     if (!currentProject) return;
     const chapter = currentChapter || projectChapters[0];
@@ -617,7 +624,7 @@ export default function InsightsPanel() {
         )}
       </div>
 
-      {/* Filter Words — Chapter Scoped */}
+      {/* Filter Words â Chapter Scoped */}
       {overused.length > 0 && (
         <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
           <div className="flex items-center justify-between mb-3">
