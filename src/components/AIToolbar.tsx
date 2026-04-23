@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Editor as TipTapEditor } from '@tiptap/react';
 import {
   Sparkles,
@@ -34,7 +35,7 @@ type ToneOption = 'formal' | 'casual' | 'dark' | 'lyrical' | 'humorous';
 
 interface AIToolbarProps {
   editor: TipTapEditor | null;
-  selectedText?: string;
+  selectedText: string;
 }
 
 interface DiffResponse {
@@ -85,6 +86,14 @@ function formatDialogueFeedback(result: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+/** Convert plain text with \n\n paragraph breaks into TipTap-compatible HTML */
+function textToHTML(text: string): string {
+  return text
+    .split(/\n\n+/)
+    .map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+    .join('');
+}
+
 // ============================================================================
 // Action Buttons Config
 // ============================================================================
@@ -108,10 +117,228 @@ const TONE_OPTIONS: { label: string; value: ToneOption }[] = [
 ];
 
 // ============================================================================
+// Floating Overlay Component (portaled to body, positioned near selection)
+// ============================================================================
+
+interface FloatingOverlayProps {
+  response: APIResponse;
+  editor: TipTapEditor;
+  onAccept: () => void;
+  onReject: () => void;
+}
+
+function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverlayProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  // Position the overlay near the selection
+  useEffect(() => {
+    const editorEl = editor.view.dom.closest('.mx-auto') as HTMLElement | null;
+    if (!editorEl) {
+      setPosition({ top: 200, left: window.innerWidth / 2 - 320, width: 640 });
+      return;
+    }
+
+    const containerRect = editorEl.getBoundingClientRect();
+
+    try {
+      const { from, to } = editor.state.selection;
+      if (from !== to) {
+        const endCoords = editor.view.coordsAtPos(to);
+        // Place below the selection end, aligned to the editor column
+        const top = endCoords.bottom + 12;
+        setPosition({
+          top: Math.min(top, window.innerHeight - 400),
+          left: containerRect.left,
+          width: containerRect.width,
+        });
+        return;
+      }
+    } catch {
+      // Fall through to fallback
+    }
+
+    // Fallback: center on editor column, partway down viewport
+    setPosition({
+      top: containerRect.top + 120,
+      left: containerRect.left,
+      width: containerRect.width,
+    });
+  }, [editor]);
+
+  // Escape key to dismiss
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onReject();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onReject]);
+
+  // Click outside to dismiss
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (overlayRef.current && !overlayRef.current.contains(e.target as Node)) {
+        onReject();
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [onReject]);
+
+  if (!position) return null;
+
+  const isDiff = 'suggestedText' in response;
+  const isFeedback = 'feedback' in response;
+
+  const overlay = (
+    <div
+      ref={overlayRef}
+      className="fixed z-[9999]"
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        width: `${position.width}px`,
+      }}
+    >
+      {/* Backdrop */}
+      <div className="fixed inset-0 bg-black/10 -z-10" />
+
+      <div
+        className="bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-xl overflow-hidden"
+        style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-[var(--color-accent)]" />
+            <span className="text-xs font-semibold text-[var(--color-text-primary)] uppercase tracking-wide">
+              {isDiff ? 'AI Suggestion' : 'Dialogue Coach'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-[var(--color-text-muted)] mr-2">Esc to dismiss</span>
+            <button
+              onClick={onReject}
+              className="p-1 rounded-md hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] transition-colors"
+              title="Dismiss (Esc)"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Diff View — manuscript formatted */}
+        {isDiff && (
+          <div className="p-5 space-y-4 max-h-[50vh] overflow-y-auto">
+            {/* Original */}
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Original</p>
+              <div
+                className="px-5 py-4 rounded-lg bg-red-50/50 dark:bg-red-950/10 border border-red-200/40 dark:border-red-900/30"
+                style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+              >
+                {(response as DiffResponse).originalText.split(/\n\n+/).map((para, i) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-[1.9] text-[var(--color-text-secondary)]"
+                    style={{
+                      marginTop: i > 0 ? '1em' : 0,
+                      textIndent: i > 0 ? '2em' : 0,
+                      textDecoration: 'line-through',
+                      textDecorationColor: 'rgba(239,68,68,0.35)',
+                    }}
+                  >
+                    {para.split(/\n/).map((line, j) => (
+                      <span key={j}>
+                        {j > 0 && <br />}
+                        {line}
+                      </span>
+                    ))}
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            {/* Suggested */}
+            <div>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Suggested</p>
+              <div
+                className="px-5 py-4 rounded-lg bg-green-50/50 dark:bg-green-950/10 border border-green-200/40 dark:border-green-900/30"
+                style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+              >
+                {(response as DiffResponse).suggestedText.split(/\n\n+/).map((para, i) => (
+                  <p
+                    key={i}
+                    className="text-sm leading-[1.9] text-[var(--color-text-primary)]"
+                    style={{
+                      marginTop: i > 0 ? '1em' : 0,
+                      textIndent: i > 0 ? '2em' : 0,
+                    }}
+                  >
+                    {para.split(/\n/).map((line, j) => (
+                      <span key={j}>
+                        {j > 0 && <br />}
+                        {line}
+                      </span>
+                    ))}
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Feedback View */}
+        {isFeedback && (
+          <div className="p-5 max-h-[50vh] overflow-y-auto">
+            <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Feedback</p>
+            <div className="px-5 py-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200/40 dark:border-blue-900/30 text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-[1.8]">
+              {(response as FeedbackResponse).feedback}
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex gap-3 px-5 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+          {isDiff && (
+            <button
+              onClick={onAccept}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm"
+            >
+              <Check size={16} />
+              Accept Changes
+            </button>
+          )}
+          <button
+            onClick={onReject}
+            className={`${isDiff ? 'flex-1' : 'w-full'} flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-secondary)] rounded-lg text-sm font-medium transition-colors`}
+          >
+            <X size={16} />
+            {isDiff ? 'Reject' : 'Dismiss'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Portal to body so it's not clipped by any parent overflow
+  if (typeof document !== 'undefined') {
+    return createPortal(overlay, document.body);
+  }
+  return null;
+}
+
+// ============================================================================
 // AI Panel Component (lives in right sidebar)
 // ============================================================================
 
-export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
+export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
   const { currentProject } = useStore();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -179,14 +406,20 @@ export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
     }
   }, [selectedText, currentProject, editor, getContext]);
 
-  // Accept suggestion — replace selected text in editor
+  // Accept suggestion — replace selected text with proper paragraph formatting
   const handleAccept = useCallback(() => {
     if (!editor || !response || !('suggestedText' in response)) return;
 
     const { from, to } = editor.state.selection;
-    editor.chain().focus().deleteRange({ from, to }).insertContent(response.suggestedText).run();
+    // Convert plain text paragraph breaks into proper HTML paragraphs for TipTap
+    const html = textToHTML(response.suggestedText);
+    editor.chain().focus().deleteRange({ from, to }).insertContent(html).run();
     setResponse(null);
   }, [editor, response]);
+
+  const handleReject = useCallback(() => {
+    setResponse(null);
+  }, []);
 
   const handleAction = useCallback((action: AIAction) => {
     if (action === 'change-tone') {
@@ -285,61 +518,14 @@ export function AIToolbar({ editor, selectedText = '' }: AIToolbarProps) {
         </div>
       )}
 
-      {/* Response: Diff View */}
-      {response && 'suggestedText' in response && (
-        <div className="mx-4 mb-3 rounded-lg border border-[var(--color-border)] overflow-hidden">
-          <div className="p-3 space-y-2.5">
-            <div>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-1">Original</p>
-              <div className="p-2 bg-red-50 dark:bg-red-950/20 rounded text-xs text-[var(--color-text-secondary)] line-through leading-relaxed">
-                {response.originalText}
-              </div>
-            </div>
-            <div>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-1">Suggested</p>
-              <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-xs text-[var(--color-text-primary)] font-medium leading-relaxed">
-                {response.suggestedText}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 p-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
-            <button
-              onClick={handleAccept}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 text-white rounded-md text-xs font-medium transition-colors"
-            >
-              <Check size={14} />
-              Accept
-            </button>
-            <button
-              onClick={() => setResponse(null)}
-              className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-secondary)] rounded-md text-xs font-medium transition-colors"
-            >
-              <X size={14} />
-              Reject
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Response: Feedback View (Dialogue Coach) */}
-      {response && 'feedback' in response && (
-        <div className="mx-4 mb-3 rounded-lg border border-[var(--color-border)] overflow-hidden">
-          <div className="p-3">
-            <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase mb-2">Dialogue Coach Feedback</p>
-            <div className="p-2.5 bg-blue-50 dark:bg-blue-950/20 rounded text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap leading-relaxed">
-              {response.feedback}
-            </div>
-          </div>
-          <div className="p-3 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
-            <button
-              onClick={() => setResponse(null)}
-              className="w-full px-3 py-2 bg-[var(--color-surface-alt)] hover:bg-[var(--color-border)] text-[var(--color-text-secondary)] rounded-md text-xs font-medium transition-colors"
-            >
-              Dismiss
-            </button>
-          </div>
-        </div>
+      {/* Floating Overlay — portaled to body so it's not clipped */}
+      {response && editor && (
+        <FloatingOverlay
+          response={response}
+          editor={editor}
+          onAccept={handleAccept}
+          onReject={handleReject}
+        />
       )}
     </div>
   );
