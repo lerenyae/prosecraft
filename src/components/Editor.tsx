@@ -75,11 +75,9 @@ function createSearchHighlightExtension() {
                   ext.storage.activeIndex = 0;
                   return DecorationSet.empty;
                 }
-
                 ext.storage.searchTerm = searchTerm;
                 const decorations: Decoration[] = [];
-                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'gi');
-
+                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
                 tr.doc.descendants((node, pos) => {
                   if (!node.isText || !node.text) return;
                   let match;
@@ -95,7 +93,6 @@ function createSearchHighlightExtension() {
                     );
                   }
                 });
-
                 ext.storage.totalMatches = decorations.length;
                 ext.storage.activeIndex = Math.min(activeIndex, Math.max(0, decorations.length - 1));
                 return DecorationSet.create(tr.doc, decorations);
@@ -106,7 +103,6 @@ function createSearchHighlightExtension() {
                 const searchTerm = ext.storage.searchTerm;
                 const decorations: Decoration[] = [];
                 const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
-
                 tr.doc.descendants((node, pos) => {
                   if (!node.isText || !node.text) return;
                   let match;
@@ -122,301 +118,424 @@ function createSearchHighlightExtension() {
                     );
                   }
                 });
-
                 ext.storage.totalMatches = decorations.length;
                 return DecorationSet.create(tr.doc, decorations);
-              B]\ØÐÚ[ÙYÈXÛÜ][ÛÙ][\HÛÙ]ÂKKÜÎÂXÛÜ][ÛÊÝ]JHÂ]\\ËÙ]Ý]JÝ]JNÂKKJKNÂKJNÂBËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBËÈÙX\Ú\ÛÛ\Û[ËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB[Ý[ÛÙX\Ú\ÈY]ÜÙX\Ú\KÛÛÜÙHNÈY]Ü\\Y]ÜÈÙX\Ú\NÝ[ÎÈÛÛÜÙN
+              }
 
-HOÚYJHÂÛÛÝØXÝ]R[^Ù]XÝ]R[^HH\ÙTÝ]J
-NÂÛÛÝÝ[X]Ú\ÈH
-Y]ÜÝÜYÙH\È[JKÙX\ÚYÚYÚËÝ[X]Ú\ÈÂËÈ\HÙX\ÚXÛÜ][ÛÂ\ÙQYXÝ
+              return tr.docChanged ? DecorationSet.empty : oldSet;
+            },
+          },
+          props: {
+            decorations(state) {
+              return this.getState(state);
+            },
+          },
+        }),
+      ];
+    },
+  });
+}
 
+// ============================================================================
+// Search Bar Component
+// ============================================================================
 
-HOÂY
-YY]ÜH]\ÂÛÛÝHY]ÜÝ]KÂÙ]Y]JÙX\ÚYÚYÚÙ^KÈÙX\Ú\KXÝ]R[^JNÂY]ÜY]Ë\Ü]Ú
-NÂKÙY]ÜÙX\Ú\KXÝ]R[^JNÂËÈØÜÛÈXÝ]HX]Ú\ÙQYXÝ
+function SearchBar({ editor, searchTerm, onClose }: { editor: TipTapEditor; searchTerm: string; onClose: () => void }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const totalMatches = (editor.storage as any).searchHighlight?.totalMatches || 0;
 
+  // Apply search decorations
+  useEffect(() => {
+    if (!editor) return;
+    const tr = editor.state.tr;
+    tr.setMeta(searchHighlightKey, { searchTerm, activeIndex });
+    editor.view.dispatch(tr);
+  }, [editor, searchTerm, activeIndex]);
 
-HOÂY
-YY]ÜÝ[X]Ú\ÈOOH
-H]\ÂÛÛÝXÛÜ][ÛÈHÙX\ÚYÚYÚÙ^KÙ]Ý]JY]ÜÝ]JNÂY
-YXÛÜ][ÛÊH]\ÂÛÛÝÝ[HXÛÜ][ÛË[
+  // Scroll to active match
+  useEffect(() => {
+    if (!editor || totalMatches === 0) return;
+    const decorations = searchHighlightKey.getState(editor.state);
+    if (!decorations) return;
+    const found = decorations.find();
+    if (found[activeIndex]) {
+      const pos = found[activeIndex].from;
+      const domAtPos = editor.view.domAtPos(pos);
+      if (domAtPos.node instanceof HTMLElement) {
+        domAtPos.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (domAtPos.node.parentElement) {
+        domAtPos.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [editor, activeIndex, totalMatches]);
 
-NÂY
-Ý[ØXÝ]R[^JHÂÛÛÝÜÈHÝ[ØXÝ]R[^KÛNÂÛÛÝÛP]ÜÈHY]ÜY]ËÛP]ÜÊÜÊNÂY
-ÛP]ÜËÙH[Ý[Ù[ÙS[[Y[
-HÂÛP]ÜËÙKØÜÛ[ÕY]ÊÈZ][Ü	ÜÛ[ÛÝ	ËØÚÎ	ØÙ[\ÈJNÂH[ÙHY
-ÛP]ÜËÙK\[[[Y[
-HÂÛP]ÜËÙK\[[[Y[ØÜÛ[ÕY]ÊÈZ][Ü	ÜÛ[ÛÝ	ËØÚÎ	ØÙ[\ÈJNÂBBKÙY]ÜXÝ]R[^Ý[X]Ú\×JNÂÛÛÝÛÓ^H\ÙPØ[XÚÊ
+  const goNext = useCallback(() => {
+    setActiveIndex(prev => (prev + 1) % Math.max(1, totalMatches));
+  }, [totalMatches]);
 
-HOÂÙ]XÝ]R[^
-]O
-]
-ÈJH	HX]X^
-KÝ[X]Ú\ÊJNÂKÝÝ[X]Ú\×JNÂÛÛÝÛÔ]H\ÙPØ[XÚÊ
+  const goPrev = useCallback(() => {
+    setActiveIndex(prev => (prev - 1 + Math.max(1, totalMatches)) % Math.max(1, totalMatches));
+  }, [totalMatches]);
 
-HOÂÙ]XÝ]R[^
-]O
-]HH
-ÈX]X^
-KÝ[X]Ú\ÊJH	HX]X^
-KÝ[X]Ú\ÊJNÂKÝÝ[X]Ú\×JNÂÛÛÝ[PÛÜÙHH\ÙPØ[XÚÊ
+  const handleClose = useCallback(() => {
+    const tr = editor.state.tr;
+    tr.setMeta(searchHighlightKey, { searchTerm: '', activeIndex: 0 });
+    editor.view.dispatch(tr);
+    onClose();
+  }, [editor, onClose]);
 
-HOÂÛÛÝHY]ÜÝ]KÂÙ]Y]JÙX\ÚYÚYÚÙ^KÈÙX\Ú\N	ÉËXÝ]R[^JNÂY]ÜY]Ë\Ü]Ú
-NÂÛÛÜÙJ
-NÂKÙY]ÜÛÛÜÙWJNÂY
-\ÙX\Ú\JH]\[Â]\
-]Û\ÜÓ[YOH^][\ËXÙ[\Ø\LMKLKHÜ\XÜ\VÝ\KXÛÛÜXÜ\WHËVÝ\KXÛÛÜ\Ý\XÙJWH^\Ú[ËLÙX\ÚÚ^O^ÌMHÛ\ÜÓ[YOH^VÝ\KXÛÛÜ]^[]]Y
-WH^\Ú[ËLÏÜ[Û\ÜÓ[YOH^\ÛHÛ[YY][H^VÝ\KXÛÛÜXXØÙ[
-WH][ÎÞÜÙX\Ú\_I][ÎÏÜÜ[Ü[Û\ÜÓ[YOH^^È^VÝ\KXÛÛÜ]^[]]Y
-WHÝÝ[X]Ú\ÈÈ	ØXÝ]R[^
-È_KÉÝÝ[X]Ú\ßX	ÓÈX]Ú\ÉßBÜÜ[]Û\ÜÓ[YOH^][\ËXÙ[\Ø\LH[X]]È]ÛÛÛXÚÏ^ÙÛÔ]HÛ\ÜÓ[YOHLHÝ[YÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WH^VÝ\KXÛÛÜ]^[]]Y
-WH]OH][Ý\È\ØXY^ÝÝ[X]Ú\ÈOOHOÚ]Û\Ú^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^ÙÛÓ^HÛ\ÜÓ[YOHLHÝ[YÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WH^VÝ\KXÛÛÜ]^[]]Y
-WH]OH^\ØXY^ÝÝ[X]Ú\ÈOOHOÚ]ÛÝÛÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ú[PÛÜÙ_HÛ\ÜÓ[YOHLHÝ[YÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WH^VÝ\KXÛÛÜ]^[]]Y
-WH]OHÛÜÙHÙX\ÚÚ^O^ÌMHÏØ]ÛÙ]Ù]
-NÂBÛÛÝPÕSÑWÓTÈHÂËÈØ]HÝ]\È[XØ]Ü[Ý[ÛØ]R[XØ]ÜÈÝ]\ÈNÈÝ]\Î	ÚYIÈ	ÜØ][ÉÈ	ÜØ]Y	ÈJHÂY
-Ý]\ÈOOH	ÚYIÊH]\[Â]\
-]Û\ÜÓ[YOH^][\ËXÙ[\Ø\LKHLÈKLH^VÌLHÛ[YY][H^VÝ\KXÛÛÜ]^[]]Y
-WHÜÝ]\ÈOOH	ÜØ][ÉÈÈ
-]Û\ÜÓ[YOHËLKHLKHÝ[YY[ËX[X\M[[X]K\[ÙHÏØ][ËÏ
-H
-]Û\ÜÓ[YOHËLKHLKHÝ[YY[ËY[Y\[MLÏØ]YÏ
-_BÙ]
-NÂBËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBËÈÛÛ\ÛÛ\Û[ËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB[\XÙHÛÛ\ÜÈÂY]Ü\\Y]Ü[Â\ÒY[ÎÛÛX[ÂB[Ý[ÛÛÛ\ÈY]Ü\ÒY[H[ÙHNÛÛ\ÜÊHÂÛÛÝÜÚÝÐXZÓY[KÙ]ÚÝÐXZÓY[WHH\ÙTÝ]J[ÙJNÂY
-YY]Ü\ÒY[H]\[ÂÛÛÝ[S[ÐÛXÚÈH
+  if (!searchTerm) return null;
 
-HOÂÛÛÝ\HÛ\
-	Ñ[\TÊNÂY
-\
-HÂY]ÜÚZ[
-KØÝ\Ê
-K^[X\Ô[ÙJ	Û[ÉÊKÙ][ÊÈY\JK[
-NÂBNÂÛÛÝH
-\ÐXÝ]NÛÛX[HOLKHÝ[Y[Ú][ÛXÛÛÜÈ	Â\ÐXÝ]BÈ	ØËVÝ\KXÛÛÜ\Ý\XÙKX[
-WH^VÝ\KXÛÛÜ]^\[X\JWIÂ	Ý^VÝ\KXÛÛÜ]^[]]Y
-WHÝ\^VÝ\KXÛÛÜ]^\ÙXÛÛ\JWHÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WIÂXÂÛÛÝ]Y\H	ÝË\MHËVÝ\KXÛÛÜXÜ\WH^LIÎÂ]\
-]Û\ÜÓ[YOH^][\ËXÙ[\Ø\LHMKLÜ\XÜ\VÝ\KXÛÛÜXÜ\WHËVÝ\KXÛÛÜXË\[X\JWH^\Ú[ËL]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛPÛ
+  return (
+    <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
+      <Search size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
+      <span className="text-sm font-medium text-[var(--color-accent)]">&ldquo;{searchTerm}&rdquo;</span>
+      <span className="text-xs text-[var(--color-text-muted)]">
+        {totalMatches > 0 ? `${activeIndex + 1}/${totalMatches}` : 'No matches'}
+      </span>
+      <div className="flex items-center gap-0.5 ml-auto">
+        <button onClick={goPrev} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Previous" disabled={totalMatches === 0}>
+          <ChevronUp size={14} />
+        </button>
+        <button onClick={goNext} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Next" disabled={totalMatches === 0}>
+          <ChevronDown size={14} />
+        </button>
+        <button onClick={handleClose} className="p-1 rounded hover:bg-[var(--color-surface-alt)] text-[var(--color-text-muted)]" title="Close search">
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ØÛ	ÊJ_H]OHÛ\OH]ÛÛÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛR][XÊ
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	Ú][XÉÊJ_H]OH][XÈ\OH]Û][XÈÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛU[\[J
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	Ý[\[IÊJ_H]OH[\[H\OH]Û[\[RXÛÛÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛTÝZÙJ
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ÜÝZÙIÊJ_H]OHÝZÙ]ÝYÚ\OH]ÛÝZÙ]ÝYÚÚ^O^ÌMHÏØ]Û]Û\ÜÓ[YO^Ù]Y\HÏ]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛRXY[ÊÈ][HJK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ÚXY[ÉËÈ][HJJ_H]OHXY[ÈH\OH]ÛXY[ÌHÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛRXY[ÊÈ][JK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ÚXY[ÉËÈ][JJ_H]OHXY[È\OH]ÛXY[ÌÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛRXY[ÊÈ][ÈJK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ÚXY[ÉËÈ][ÈJJ_H]OHXY[ÈÈ\OH]ÛXY[ÌÈÚ^O^ÌMHÏØ]Û]Û\ÜÓ[YO^Ù]Y\HÏ]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛPØÚÜ][ÝJ
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ØØÚÜ][ÝIÊJ_H]OHØÚÜ][ÝH\OH]Û][ÝHÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛP[]\Ý
+const DEBOUNCE_MS = 2000;
 
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	Ø[]\Ý	ÊJ_H]OH[]\Ý\OH]Û\ÝÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙÙÛSÜ\Y\Ý
+// ============================================================================
+// Toolbar Component
+// ============================================================================
 
-K[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	ÛÜ\Y\Ý	ÊJ_H]OHÜ\Y\Ý\OH]Û\ÝÜ\YÚ^O^ÌMHÏØ]Û]Û\ÜÓ[YOH[]]H]ÛÛÛXÚÏ^Ê
-HOÙ]ÚÝÐXZÓY[J\ÚÝÐXZÓY[J_HÛ\ÜÓ[YO^Ø[ÙJ_H]OHØÙ[HXZÈ\OH]ÛZ[\ÈÚ^O^ÌMHÏØ]ÛÜÚÝÐXZÓY[H	
-]Û\ÜÓ[YOHXÛÛ]HÜY[YLKÌ][Û]K^LKÌ]LHKLHËVÝ\KXÛÛÜ\Ý\XÙJWHÜ\Ü\VÝ\KXÛÛÜXÜ\WHÝ[Y[ÈÚYÝË[ÈMLZ[]ËVÌLHÖÉÊ
-
-Ë	ËHHIË	ßË	ËË	ÈÈÈÉ×KX\
-X[O
-]ÛÙ^O^ÛX[BÛÛXÚÏ^Ê
-HOÈY]ÜÚZ[
-KØÝ\Ê
-K[Ù\ÛÛ[
-È\N	ÚÜ^Û[[IË]ÎÈÙ\\]ÜÝ[NX[HJK[
-NÈÙ]ÚÝÐXZÓY[J[ÙJNÈ_B\OH]ÛÛ\ÜÓ[YOHËY[LÈKLKH^\ÛH^VÝ\KXÛÛÜ]^\ÙXÛÛ\JWHÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WH^XÙ[\[Ú][ÛXÛÛÜÈÛX[BØ]Û
-J_BÙ]
-_BÙ]]Û\ÜÓ[YO^Ù]Y\HÏ]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙ]^[YÛ	ÛY	ÊK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]JÈ^[YÛ	ÛY	ÈJJ_H]OH[YÛY\OH]Û[YÛYÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙ]^[YÛ	ØÙ[\ÊK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]JÈ^[YÛ	ØÙ[\ÈJJ_H]OH[YÛÙ[\\OH]Û[YÛÙ[\Ú^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KÙ]^[YÛ	ÜYÚ	ÊK[
-_HÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]JÈ^[YÛ	ÜYÚ	ÈJJ_H]OH[YÛYÚ\OH]Û[YÛYÚÚ^O^ÌMHÏØ]Û]Û\ÜÓ[YO^Ù]Y\HÏ]ÛÛÛXÚÏ^Ú[S[ÐÛXÚßHÛ\ÜÓ[YO^ØY]Ü\ÐXÝ]J	Û[ÉÊJ_H]OHY[È\OH]Û[ÒXÛÛÚ^O^ÌMHÏØ]Û]Û\ÜÓ[YO^Ù]Y\HÏ]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-K[Ê
-K[
-_B\ØXY^ÈYY]ÜØ[
-K[Ê
-_BÛ\ÜÓ[YO^ØLKHÝ[Y[Ú][ÛXÛÛÜÈ	ÂY]ÜØ[
-K[Ê
-BÈ	Ý^VÝ\KXÛÛÜ]^[]]Y
-WHÝ\^VÝ\KXÛÛÜ]^\ÙXÛÛ\JWHÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WIÂ	Ý^VÝ\KXÛÛÜXÜ\WHÝ\ÛÜ[ÝX[ÝÙY	ÂXB]OH[È\OH]Û[ÌÚ^O^ÌMHÏØ]Û]ÛÛÛXÚÏ^Ê
-HOY]ÜÚZ[
-KØÝ\Ê
-KYÊ
-K[
-_B\ØXY^ÈYY]ÜØ[
-KYÊ
-_BÛ\ÜÓ[YO^ØLKHÝ[Y[Ú][ÛXÛÛÜÈ	ÂY]ÜØ[
-KYÊ
-BÈ	Ý^VÝ\KXÛÛÜ]^[]]Y
-WHÝ\^VÝ\KXÛÛÜ]^\ÙXÛÛ\JWHÝ\ËVÝ\KXÛÛÜ\Ý\XÙKX[
-WIÂ	Ý^VÝ\KXÛÛÜXÜ\WHÝ\ÛÜ[ÝX[ÝÙY	ÂXB]OHYÈ\OH]ÛYÌÚ^O^ÌMHÏØ]ÛÙ]
-NÂBËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOBËÈY]ÜÛÛ\Û[ËÈOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOB[\XÙHY]ÜÜÈÂÛÙ[XÝ[ÛÚ[ÙOÎ
-^Ý[ÊHOÚYÂ\ÐXÝ]TÙ[XÝ[ÛÎÛÛX[ÂBÛÛÝÙX\ÚYÚYÚHÜX]TÙX\ÚYÚYÚ^[Ú[Û
-NÂ^Ü[Ý[ÛY]ÜÈÛÙ[XÝ[ÛÚ[ÙK\ÐXÝ]TÙ[XÝ[ÛNY]ÜÜÊHÂÛÛÝÂÝ\[ØÙ[K\]TØÙ[KØÝ\Ó[ÙKYÚYÚÛÜÙ]YÚYÚÛÜHH\ÙTÝÜJ
-NÂÛÛÝXÝ[ÙU[Y\YH\ÙTYÙRË[Y[Ý][[
-NÂÛÛÝÙ[XÝ[Û[Y\YH\ÙTYÙRË[Y[Ý][[
-NÂÛÛÝÛÜÛÝ[[Y\YH\ÙTYÙRË[Y[Ý][[
-NÂÛÛÝØ]TÝ]\Õ[Y\YH\ÙTYÙRË[Y[Ý][[
-NÂÛÛÝÜØ]TÝ]\ËÙ]Ø]TÝ]\×HH\ÙTÝ]O	ÚYIÈ	ÜØ][ÉÈ	ÜØ]Y	Ï	ÚYIÊNÂÛÛÝY]ÜH\ÙQY]ÜÂ^[Ú[ÛÎÂÝ\\Ú]ÛÛYÝ\JÂÜ^Û[[N[ÙK\YÜ\ÂS]X]\ÎÈÛ\ÜÎ	ÜÜÙK\\YÜ\	ÈKKXY[ÎÂS]X]\ÎÈÛ\ÜÎ	ÜÜÙKZXY[ÉÈKK\XZÎÂS]X]\ÎÈÛ\ÜÎ	ØXZÉÈKKØÚÜ][ÝNÂS]X]\ÎÈÛ\ÜÎ	ÜÜÙKXØÚÜ][ÝIÈKKJKXÙZÛ\ÛÛYÝ\JÂXÙZÛ\	ÐYÚ[Ü][ËËJKÚ\XÝ\ÛÝ[ÛÛYÝ\JÈ[Z][JK[\[K[ËÛÛYÝ\JÂÜ[ÛÛXÚÎ[ÙKS]X]\ÎÂÛ\ÜÎ	Ý^VÝ\KXÛÛÜXXØÙ[
-WH[\[HÝ\ÜXÚ]KN	ËKJK^[YÛÛÛYÝ\JÂ\\ÎÉÚXY[ÉË	Ü\YÜ\	×KJKÙX\ÚYÚYÚÜ^Û[[K^[
-ÂY]X]\Ê
-HÂ]\ÂÙ\\]ÜÝ[NÂY][	Ê
-
-Ë\ÙRS
-[[Y[S[[Y[
-HO[[Y[Ù]]X]J	Ù]K\Ù\\]Ü\Ý[IÊH	Ê
-
-Ë[\S
-]X]\ÎXÛÜÝ[ËÝ[ÏHO
-Â	Ù]K\Ù\\]Ü\Ý[IÎ]X]\ËÙ\\]ÜÝ[H	Ê
-
-ËJKKNÂKYÙUY]Ê
-HÂ]\
-ÈÙHNÈÙNÈ]ÎXÛÜÝ[ËÝ[ÏHJHOÂÛÛÝÛHHØÝ[Y[ÜX]Q[[Y[
-	Ù]ÊNÂÛKÛ\ÜÓ\ÝY
-	ÜØÙ[KXXZÉÊNÂÛK^ÛÛ[HÙK]ËÙ\\]ÜÝ[H	Ê
-
-ÎÂÛKÛÛ[Y]XHH	Ù[ÙIÎÂ]\ÈÛHNÂNÂKJKKÛÛ[Ý\[ØÙ[OËÛÛ[	ÉËY]ÜÜÎÂ]X]\ÎÂÛ\ÜÎ	ÜÜÙKYY]ÜØÝ\ÎÝ][K[ÛHX^]Ë[ÛHZ[ZY[	ËKKÛ\]N
-ÈY]ÜJHOÂËÈ[[YYX]HÛÜÛÝ[\]H
-\ÊHÜ\ÜÛÚ]HY[Y
-ÛÜÛÝ[[Y\YÝ\[
-HÛX\[Y[Ý]
-ÛÜÛÝ[[Y\YÝ\[
-NÂÛÜÛÝ[[Y\YÝ\[HÙ][Y[Ý]
+interface ToolbarProps {
+  editor: TipTapEditor | null;
+  isHidden?: boolean;
+}
 
+function Toolbar({ editor, isHidden = false }: ToolbarProps) {
+  const [showBreakMenu, setShowBreakMenu] = useState(false);
 
-HOÂY
-Ý\[ØÙ[JHÂÛÛÝ^HY]ÜÙ]^
+  if (!editor || isHidden) return null;
 
-NÂÛÛÝÛÜÛÝ[H^[J
-KÜ]
-×ÊËÊK[\ÈOË[Ý
-K[ÝÂ\]TØÙ[JÝ\[ØÙ[KYÈÛÜÛÝ[JNÂBK
-NÂËÈXÝ[ÙY[ÛÛ[Ø]H
-ÊBÙ]Ø]TÝ]\Ê	ÜØ][ÉÊNÂY
-XÝ[ÙU[Y\YÝ\[
-HÛX\[Y[Ý]
-XÝ[ÙU[Y\YÝ\[
-NÂXÝ[ÙU[Y\YÝ\[HÙ][Y[Ý]
+  const handleLinkClick = () => {
+    const url = prompt('Enter URL:');
+    if (url) {
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }
+  };
 
+  const btn = (isActive: boolean) =>
+    `p-1.5 rounded transition-colors ${
+      isActive
+        ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-primary)]'
+        : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+    }`;
 
-HOÂY
-Ý\[ØÙ[JHÂÛÛÝ[HY]ÜÙ]S
+  const divider = 'w-px h-5 bg-[var(--color-border)] mx-0.5';
 
-NÂÛÛÝ^HY]ÜÙ]^
+  return (
+    <div className="flex items-center gap-0.5 px-4 py-2 border-b border-[var(--color-border)] bg-[var(--color-bg-primary)] flex-shrink-0">
+      <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))} title="Bold" type="button">
+        <Bold size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleItalic().run()} className={btn(editor.isActive('italic'))} title="Italic" type="button">
+        <Italic size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={btn(editor.isActive('underline'))} title="Underline" type="button">
+        <UnderlineIcon size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleStrike().run()} className={btn(editor.isActive('strike'))} title="Strikethrough" type="button">
+        <Strikethrough size={16} />
+      </button>
 
-NÂÛÛÝÛÜÛÝ[H^[J
-KÜ]
-×ÊËÊK[\ÈOË[Ý
-K[ÝÂ\]TØÙ[JÝ\[ØÙ[KYÈÛÛ[[ÛÜÛÝ[JNÂÙ]Ø]TÝ]\Ê	ÜØ]Y	ÊNÂËÈÛX\Ø]YY\ÜÂY
-Ø]TÝ]\Õ[Y\YÝ\[
-HÛX\[Y[Ý]
-Ø]TÝ]\Õ[Y\YÝ\[
-NÂØ]TÝ]\Õ[Y\YÝ\[HÙ][Y[Ý]
+      <div className={divider} />
 
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btn(editor.isActive('heading', { level: 1 }))} title="Heading 1" type="button">
+        <Heading1 size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} className={btn(editor.isActive('heading', { level: 2 }))} title="Heading 2" type="button">
+        <Heading2 size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} className={btn(editor.isActive('heading', { level: 3 }))} title="Heading 3" type="button">
+        <Heading3 size={16} />
+      </button>
 
-HOÙ]Ø]TÝ]\Ê	ÚYIÊKÌ
-NÂBKPÕSÑWÓTÊNÂKÛÙ[XÝ[Û\]N
-ÈY]ÜJHOÂY
-[ÛÙ[XÝ[ÛÚ[ÙJH]\ÂËÈXÝ[ÙHÙ[XÝ[ÛÚ[Ù\ÂY
-Ù[XÝ[Û[Y\YÝ\[
-HÛX\[Y[Ý]
-Ù[XÝ[Û[Y\YÝ\[
-NÂÙ[XÝ[Û[Y\YÝ\[HÙ][Y[Ý]
+      <div className={divider} />
 
+      <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))} title="Blockquote" type="button">
+        <Quote size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))} title="Bullet List" type="button">
+        <List size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().toggleOrderedList().run()} className={btn(editor.isActive('orderedList'))} title="Ordered List" type="button">
+        <ListOrdered size={16} />
+      </button>
 
-HOÂÛÛÝÈÛKÈHHY]ÜÝ]KÙ[XÝ[ÛÂY
-ÛHOOHÊHÂÛÙ[XÝ[ÛÚ[ÙJ	ÉÊNÂH[ÙHÂÛÛÝ^HY]ÜÝ]KØË^]ÙY[ÛKÊNÂÛÙ[XÝ[ÛÚ[ÙJ^[J
-JNÂBKÌ
-NÂKJNÂËÈ\]HY]ÜÛÛ[Ú[ØÙ[HÚ[Ù\Â\ÙQYXÝ
+      <div className="relative">
+        <button onClick={() => setShowBreakMenu(!showBreakMenu)} className={btn(false)} title="Scene Break" type="button">
+          <Minus size={16} />
+        </button>
+        {showBreakMenu && (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-lg z-50 min-w-[100px]">
+            {['* * *', '- - -', '~ ~ ~', '. . .', '# # #'].map(label => (
+              <button
+                key={label}
+                onClick={() => {
+                  editor.chain().focus().insertContent({ type: 'horizontalRule', attrs: { separatorStyle: label } }).run();
+                  setShowBreakMenu(false);
+                }}
+                type="button"
+                className="w-full px-3 py-1.5 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] text-center transition-colors"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
+      <div className={divider} />
 
-HOÂY
-Y]Ü	Ý\[ØÙ[JHÂÛÛÝÝ\[ÛÛ[HY]ÜÙ]S
+      <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))} title="Align Left" type="button">
+        <AlignLeft size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().setTextAlign('center').run()} className={btn(editor.isActive({ textAlign: 'center' }))} title="Align Center" type="button">
+        <AlignCenter size={16} />
+      </button>
+      <button onClick={() => editor.chain().focus().setTextAlign('right').run()} className={btn(editor.isActive({ textAlign: 'right' }))} title="Align Right" type="button">
+        <AlignRight size={16} />
+      </button>
 
-NÂÛÛÝ]ÐÛÛ[HÝ\[ØÙ[KÛÛ[	ÉÎÂY
-Ý\[ÛÛ[OOH]ÐÛÛ[
-HÂY]ÜÛÛ[X[ËÙ]ÛÛ[
-]ÐÛÛ[
-NÂBBKÙY]ÜÝ\[ØÙ[OËYJNÂËÈÛX[\\ÙQYXÝ
+      <div className={divider} />
 
+      <button onClick={handleLinkClick} className={btn(editor.isActive('link'))} title="Add Link" type="button">
+        <LinkIcon size={16} />
+      </button>
 
-HOÂ]\
+      <div className={divider} />
 
-HOÂY
-XÝ[ÙU[Y\YÝ\[
-HÛX\[Y[Ý]
-XÝ[ÙU[Y\YÝ\[
-NÂY
-Ù[XÝ[Û[Y\YÝ\[
-HÛX\[Y[Ý]
-Ù[XÝ[Û[Y\YÝ\[
-NÂY
-ÛÜÛÝ[[Y\YÝ\[
-HÛX\[Y[Ý]
-ÛÜÛÝ[[Y\YÝ\[
-NÂY
-Ø]TÝ]\Õ[Y\YÝ\[
-HÛX\[Y[Ý]
-Ø]TÝ]\Õ[Y\YÝ\[
-NÂNÂK×JNÂ]\
-]Û\ÜÓ[YO^Ø^^XÛÛY[ËVÝ\KXÛÛÜ\Ý\XÙJWH	Ú\ÐXÝ]TÙ[XÝ[ÛÈ	ÜÙ[XÝ[ÛYØÝ\Ë[[ÙIÈ	ÉßXO]Û\ÜÓ[YOH^][\ËXÙ[\^\Ú[ËL]Û\ÜÓ[YOH^LHÛÛ\Y]Ü^ÙY]ÜH\ÒY[^ÙØÝ\Ó[Ù_HÏÙ]ÈYØÝ\Ó[ÙH	Ý\[ØÙ[H	Ø]R[XØ]ÜÝ]\Ï^ÜØ]TÝ]\ßHÏBÙ]ÙY]Ü	YÚYÚÛÜ	
-ÙX\Ú\Y]Ü^ÙY]ÜBÙX\Ú\O^ÚYÚYÚÛÜBÛÛÜÙO^Ê
-HOÙ]YÚYÚÛÜ
-[
-_BÏ
-_B]Û\ÜÓ[YOH^LHÝ\ÝË^KX]]ÈÈXÝ\[ØÙ[HÈ
-]Û\ÜÓ[YOH^][\ËXÙ[\\ÝYKXÙ[\Y[Z[ZNMÛ\ÜÓ[YOH^X\ÙH^VÝ\KXÛÛÜ]^[]]Y
-WHÙ[XÝHØÙ[HÈYÚ[Ü][ÂÜÙ]
-H
-]Û\ÜÓ[YOH^X]]ÈX^]ËVÍHMKLLÛNMÎN[]]HY]ÜÛÛ[Y]Ü^ÙY]ÜHÏRUÛÛ\Y]Ü^ÙY]ÜHÏÙ]
-_BÙ]Ù]
-NÂB^ÜY][Y]ÜÂ
+      <button
+        onClick={() => editor.chain().focus().undo().run()}
+        disabled={!editor.can().undo()}
+        className={`p-1.5 rounded transition-colors ${
+          editor.can().undo()
+            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+            : 'text-[var(--color-border)] cursor-not-allowed'
+        }`}
+        title="Undo"
+        type="button"
+      >
+        <Undo2 size={16} />
+      </button>
+      <button
+        onClick={() => editor.chain().focus().redo().run()}
+        disabled={!editor.can().redo()}
+        className={`p-1.5 rounded transition-colors ${
+          editor.can().redo()
+            ? 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+            : 'text-[var(--color-border)] cursor-not-allowed'
+        }`}
+        title="Redo"
+        type="button"
+      >
+        <Redo2 size={16} />
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// Editor Component
+// ============================================================================
+
+interface EditorProps {
+  onSelectionChange?: (text: string) => void;
+  hasActiveSelection?: boolean;
+}
+
+const SearchHighlight = createSearchHighlightExtension();
+
+export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
+  const {
+    currentScene,
+    updateScene,
+    focusMode,
+    highlightWord,
+    setHighlightWord,
+  } = useStore();
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const selectionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wordCountTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track selected text locally for AIToolbar
+  const [selectedText, setSelectedText] = useState('');
+
+  // Save status indicator
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        horizontalRule: false,
+        paragraph: { HTMLAttributes: { class: 'prose-paragraph' } },
+        heading: { HTMLAttributes: { class: 'prose-heading' } },
+        hardBreak: { HTMLAttributes: { class: 'break' } },
+        blockquote: { HTMLAttributes: { class: 'prose-blockquote' } },
+      }),
+      Placeholder.configure({
+        placeholder: 'Begin writing...',
+      }),
+      CharacterCount.configure({ limit: null }),
+      Underline,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-[var(--color-accent)] underline hover:opacity-80',
+        },
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      SearchHighlight,
+      HorizontalRule.extend({
+        addAttributes() {
+          return {
+            separatorStyle: {
+              default: '* * *',
+              parseHTML: (element: HTMLElement) => element.getAttribute('data-separator-style') || '* * *',
+              renderHTML: (attributes: Record<string, string>) => ({
+                'data-separator-style': attributes.separatorStyle || '* * *',
+              }),
+            },
+          };
+        },
+        addNodeView() {
+          return ({ node }: { node: { attrs: Record<string, string> } }) => {
+            const dom = document.createElement('div');
+            dom.classList.add('scene-break');
+            dom.textContent = node.attrs.separatorStyle || '* * *';
+            dom.contentEditable = 'false';
+            return { dom };
+          };
+        },
+      }),
+    ],
+    content: currentScene?.content || '',
+    editorProps: {
+      attributes: {
+        class: 'prose-editor focus:outline-none max-w-none min-h-full',
+      },
+    },
+    onUpdate: ({ editor }) => {
+      // Immediate word count update (200ms) for responsive feel
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+      wordCountTimerRef.current = setTimeout(() => {
+        if (currentScene) {
+          const text = editor.getText();
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          updateScene(currentScene.id, { wordCount });
+        }
+      }, 200);
+
+      // Show saving indicator
+      setSaveStatus('saving');
+
+      // Debounced full content save (2s)
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        if (currentScene) {
+          const html = editor.getHTML();
+          const text = editor.getText();
+          const wordCount = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+          updateScene(currentScene.id, { content: html, wordCount });
+          setSaveStatus('saved');
+          // Reset to idle after showing "saved" briefly
+          setTimeout(() => setSaveStatus('idle'), 1500);
+        }
+      }, DEBOUNCE_MS);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      // Debounce selection changes
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+      selectionTimerRef.current = setTimeout(() => {
+        const { from, to } = editor.state.selection;
+        if (from === to) {
+          setSelectedText('');
+          onSelectionChange?.('');
+        } else {
+          const text = editor.state.doc.textBetween(from, to);
+          const trimmed = text.trim();
+          setSelectedText(trimmed);
+          onSelectionChange?.(trimmed);
+        }
+      }, 300);
+    },
+  });
+
+  // Update editor content when scene changes
+  useEffect(() => {
+    if (editor && currentScene) {
+      const currentContent = editor.getHTML();
+      const newContent = currentScene.content || '';
+      if (currentContent !== newContent) {
+        editor.commands.setContent(newContent);
+      }
+    }
+  }, [editor, currentScene?.id]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+      if (wordCountTimerRef.current) clearTimeout(wordCountTimerRef.current);
+    };
+  }, []);
+
+  return (
+    <div className={`flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'selection-focus-mode' : ''}`}>
+      <Toolbar editor={editor} isHidden={focusMode} />
+
+      {editor && highlightWord && (
+        <SearchBar editor={editor} searchTerm={highlightWord} onClose={() => setHighlightWord(null)} />
+      )}
+
+      {/* Save status indicator */}
+      {saveStatus !== 'idle' && (
+        <div className="absolute top-2 right-2 z-10 px-2 py-1 rounded text-[10px] font-medium transition-opacity duration-300"
+          style={{ opacity: saveStatus === 'saved' ? 0.7 : 1 }}
+        >
+          <span className={saveStatus === 'saving' ? 'text-[var(--color-text-muted)]' : 'text-emerald-500'}>
+            {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
+          </span>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto">
+        {!currentScene ? (
+          <div className="flex items-center justify-center h-full min-h-96">
+            <p className="text-base text-[var(--color-text-muted)]">
+              Select a scene to begin writing
+            </p>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8 relative">
+            <EditorContent editor={editor} />
+            <AIToolbar editor={editor} selectedText={selectedText} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default Editor;
