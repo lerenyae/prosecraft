@@ -76,8 +76,7 @@ const SEVERITY_CONFIG: Record<string, { icon: typeof CheckCircle2; bg: string; b
 // ============================================================================
 
 export default function BetaReaderPanel({ selectedText, onAnnotationClick }: BetaReaderPanelProps) {
-  const { currentChapter,
-    projectChapters, chapterScenes, currentProject } = useStore();
+  const { currentChapter, chapterScenes, currentProject } = useStore();
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSelectionLoading, setIsSelectionLoading] = useState(false);
@@ -114,12 +113,13 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
           chapterTitle: currentChapter.title,
           chapterContent: content,
           genre: currentProject.genre,
-          chapterNumber: projectChapters.findIndex(c => c.id === currentChapter.id) + 1,
-          totalChapters: projectChapters.length,
         }),
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || `API error: ${response.status}`);
+      }
 
       const data = await response.json();
       setResult(data);
@@ -152,7 +152,10 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
         }),
       });
 
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => null);
+        throw new Error(errBody?.error || `API error: ${response.status}`);
+      }
 
       const data = await response.json();
       setSelectionResult(data);
@@ -425,4 +428,3 @@ function AnnotationCard({
     </div>
   );
 }
-
