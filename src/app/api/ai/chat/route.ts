@@ -12,13 +12,20 @@ interface ChatRequest {
   chapterTitle?: string;
   genre?: string;
   chapterPosition?: string;
+  memoryContext?: string;
 }
 
 function stripHtml(html: string): string {
   let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   text = text.replace(/<[^>]+>/g, '');
-  text = text.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&');
+  text = text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&amp;/g, '&');
   text = text.replace(/\s+/g, ' ').trim();
   return text;
 }
@@ -26,6 +33,7 @@ function stripHtml(html: string): string {
 // Genre-to-persona mapping for tailored editorial feedback
 function getEditorialPersona(genre?: string): string {
   const g = (genre || '').toLowerCase();
+
   if (g.includes('literary') || g.includes('lit fic'))
     return 'You are a seasoned literary fiction editor with a sharp eye for prose rhythm, subtext, and thematic resonance. You value precision of language and emotional authenticity.';
   if (g.includes('romance'))
@@ -42,13 +50,14 @@ function getEditorialPersona(genre?: string): string {
     return 'You are a historical fiction editor who values period authenticity, grounded detail, and the balance between research and narrative drive.';
   if (g.includes('memoir') || g.includes('creative nonfiction'))
     return 'You are a memoir/creative nonfiction editor who focuses on narrative structure, emotional honesty, and the balance between reflection and scene.';
+
   return 'You are an expert fiction editor and writing coach with deep craft knowledge across genres.';
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ChatRequest;
-    const { messages, chapterContent, chapterTitle, genre, chapterPosition } = body;
+    const { messages, chapterContent, chapterTitle, genre, chapterPosition, memoryContext } = body;
 
     if (!messages || messages.length === 0) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 });
@@ -60,9 +69,14 @@ export async function POST(request: NextRequest) {
     const pos = chapterPosition ? ` (${chapterPosition})` : '';
     const persona = getEditorialPersona(genre);
 
+    // Build memory section if available
+    const memorySection = memoryContext
+      ? `\n\nPROJECT MEMORY (facts the author has established across sessions):\n${memoryContext}\n\nUse these facts to maintain consistency. Reference them when relevant but do not repeat them back verbatim unless asked.`
+      : '';
+
     const systemPrompt = `${persona}
 
-You are embedded in a writing studio, helping the author revise their chapter${chTitle}${pos} from ${g}.
+You are embedded in a writing studio, helping the author revise their chapter${chTitle}${pos} from ${g}.${memorySection}
 
 CHAPTER TEXT:
 ---
