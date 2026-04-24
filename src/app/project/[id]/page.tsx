@@ -369,31 +369,108 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
 
     if (format === 'docx') {
-      const { Document, Packer, Paragraph, HeadingLevel, AlignmentType } = await import('docx');
+      const { Document, Packer, Paragraph, TextRun, AlignmentType, PageBreak, Footer, PageNumber } = await import('docx');
+
+      // Novel manuscript format:
+      //   Times New Roman 12pt (size 24 in half-points)
+      //   Double-spaced (line 480 in twentieths of a point)
+      //   1-inch margins (1440 twips)
+      //   First-line indent 0.5" (720 twips) on body paragraphs
+      //   No space between paragraphs
+      //   Chapter headings centered on new page, ALL CAPS
+      //   Page number in footer
+      const FONT = 'Times New Roman';
+      const BODY_SIZE = 24; // 12pt
+      const TITLE_SIZE = 36; // 18pt
+      const CHAPTER_SIZE = 28; // 14pt
+      const LINE_DOUBLE = 480;
+      const INDENT_FIRST = 720; // 0.5"
+
+      const bodyRun = (text: string) =>
+        new TextRun({ text, font: FONT, size: BODY_SIZE });
+
+      const bodyParagraph = (text: string) =>
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          indent: { firstLine: INDENT_FIRST },
+          spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
+          children: [bodyRun(text)],
+        });
+
+      const blankLine = () =>
+        new Paragraph({
+          spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
+          children: [new TextRun({ text: '', font: FONT, size: BODY_SIZE })],
+        });
+
       const children: InstanceType<typeof Paragraph>[] = [];
+
+      // Title page — centered in vertical space via several blank lines
+      for (let i = 0; i < 10; i++) children.push(blankLine());
       children.push(new Paragraph({
-        heading: HeadingLevel.TITLE,
         alignment: AlignmentType.CENTER,
-        children: [],
-        text: currentProject.title,
+        spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
+        children: [new TextRun({ text: currentProject.title, font: FONT, size: TITLE_SIZE, bold: true })],
       }));
-      projectChapters.forEach((chapter) => {
-        children.push(new Paragraph({ text: '' }));
-        children.push(new Paragraph({
-          heading: HeadingLevel.HEADING_1,
+
+      projectChapters.forEach((chapter, idx) => {
+        // Chapter on new page
+        const chapterHeading = new Paragraph({
           alignment: AlignmentType.CENTER,
-          text: chapter.title,
-        }));
+          spacing: { line: LINE_DOUBLE, before: 0, after: 480 },
+          children: [
+            new PageBreak(),
+            new TextRun({ text: (chapter.title || `Chapter ${idx + 1}`).toUpperCase(), font: FONT, size: CHAPTER_SIZE, bold: true }),
+          ],
+        });
+        children.push(chapterHeading);
+
+        let firstParaOfChapter = true;
         chapterScenes(chapter.id).forEach((scene) => {
           const text = stripHtml(scene.content).trim();
           text.split(/\n\n+/).forEach((para) => {
-            if (para.trim()) {
-              children.push(new Paragraph({ text: para.replace(/\n/g, ' ').trim() }));
+            const clean = para.replace(/\n/g, ' ').trim();
+            if (!clean) return;
+            if (firstParaOfChapter) {
+              // First paragraph after chapter heading — no indent (book convention)
+              children.push(new Paragraph({
+                alignment: AlignmentType.LEFT,
+                spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
+                children: [bodyRun(clean)],
+              }));
+              firstParaOfChapter = false;
+            } else {
+              children.push(bodyParagraph(clean));
             }
           });
         });
       });
-      const doc = new Document({ sections: [{ properties: {}, children }] });
+
+      const doc = new Document({
+        creator: 'ProseCraft',
+        title: currentProject.title,
+        styles: {
+          default: {
+            document: { run: { font: FONT, size: BODY_SIZE } },
+          },
+        },
+        sections: [{
+          properties: {
+            page: {
+              margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1" all around
+            },
+          },
+          footers: {
+            default: new Footer({
+              children: [new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: BODY_SIZE })],
+              })],
+            }),
+          },
+          children,
+        }],
+      });
       const blob = await Packer.toBlob(doc);
       triggerDownload(blob, `${safeTitle}.docx`);
       return;

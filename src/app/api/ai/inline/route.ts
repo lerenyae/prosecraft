@@ -30,24 +30,51 @@ function buildWritingRulesBlock(rules?: string[] | null): string {
 }
 
 interface DialogueCoachFeedback {
+  hasDialogue: boolean;
+  dialogueSummary?: string;
   voiceConsistency: {
-    consistent: boolean;
-    issues?: string[];
+    rating: 1 | 2 | 3 | 4 | 5;
+    notes: string;
+    examples?: string[];
   };
   naturalism: {
     rating: 1 | 2 | 3 | 4 | 5;
     notes: string;
+    examples?: string[];
   };
   subtext: {
-    present: boolean;
+    rating: 1 | 2 | 3 | 4 | 5;
+    notes: string;
     examples?: string[];
   };
   infoDumping: {
     detected: boolean;
-    issues?: string[];
+    notes: string;
+    examples?: string[];
   };
-  overallNotes: string;
+  beats: {
+    notes: string;
+    examples?: string[];
+  };
+  topSuggestion: string;
 }
+
+const CHANGE_SUMMARY_INSTRUCTIONS = `
+
+After the revised text, output this EXACT delimiter on its own line, then a concise change summary:
+---CHANGES---
+- [Category]: [Count] — [one-line description, cite one specific example from the text]
+- (3-6 bullets total, covering the categories that actually apply)
+
+Categories to use when relevant: Grammar, Punctuation, Tense, Word Choice, Clarity, Pacing, Show-vs-Tell, Redundancy, Dialogue, Sensory Detail, Tone.
+Every bullet must describe a REAL change you made — do not list categories that were untouched. If you made no changes, output "- No changes: text already strong."
+
+Example format:
+[revised text here]
+---CHANGES---
+- Grammar: 3 — fixed subject-verb agreement ("the team were" → "the team was")
+- Punctuation: 5 — added Oxford commas in list constructions
+- Word Choice: 2 — replaced "walked quickly" with "strode" for precision`;
 
 function getSystemPrompt(
   action: InlineAction,
@@ -61,31 +88,43 @@ function getSystemPrompt(
     : '';
 
   const prompts: Record<InlineAction, string> = {
-    improve: `${baseContext} You are an expert fiction editor. Your task is to improve the prose quality of the selected text while preserving the author's voice and style. Focus on clarity, vividity, and narrative impact. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    improve: `${baseContext} You are an expert fiction editor. Your task is to improve the prose quality of the selected text while preserving the author's voice and style. Focus on clarity, vividity, and narrative impact. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    'show-dont-tell': `${baseContext} Convert the selected text from telling into showing through action, dialogue, sensory detail, or body language. Make the reader experience the moment rather than being told about it. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    'show-dont-tell': `${baseContext} Convert the selected text from telling into showing through action, dialogue, sensory detail, or body language. Make the reader experience the moment rather than being told about it. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    tighten: `${baseContext} Remove unnecessary words and cut filler. Make every word count. Strengthen the prose by eliminating redundancy, weak adverbs, and verbose constructions. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    tighten: `${baseContext} Remove unnecessary words and cut filler. Make every word count. Strengthen the prose by eliminating redundancy, weak adverbs, and verbose constructions. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    expand: `${baseContext} Expand the passage with sensory detail, interiority, emotional depth, or richer description. Build atmosphere and immersion. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    expand: `${baseContext} Expand the passage with sensory detail, interiority, emotional depth, or richer description. Build atmosphere and immersion. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    'change-tone': `${baseContext} Rewrite the selected text to match a ${toneTarget} tone. Adjust word choice, pacing, and emotional register accordingly. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    'change-tone': `${baseContext} Rewrite the selected text to match a ${toneTarget} tone. Adjust word choice, pacing, and emotional register accordingly. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    'fix-grammar': `${baseContext} Fix all grammar, punctuation, and spelling errors in the selected text. Preserve the author's style and voice exactly. Return ONLY the revised text with no explanations or commentary.${styleContext}`,
+    'fix-grammar': `${baseContext} Fix all grammar, punctuation, and spelling errors in the selected text. Preserve the author's style and voice exactly. Return the revised text followed by the change summary.${CHANGE_SUMMARY_INSTRUCTIONS}${styleContext}`,
 
-    'dialogue-coach': `${baseContext} Analyze the selected dialogue for:
-1. Voice consistency - Does each character have a distinct, consistent voice?
-2. Naturalism - Does the dialogue feel natural and authentic?
-3. Subtext - Is there tension, conflict, or hidden meaning beneath the surface?
-4. Info-dumping - Is the dialogue weighed down by exposition?
+    'dialogue-coach': `${baseContext} You are a dialogue doctor. Critique the dialogue in the selected passage.
 
-Return ONLY valid JSON (no markdown, no code blocks) with this exact structure:
+FIRST: determine if the selection actually contains dialogue (quoted speech between characters). Set "hasDialogue" accordingly.
+- If hasDialogue is false, set "dialogueSummary" to a one-sentence explanation of what the selection is instead (e.g. "This passage is narration/description, not dialogue.") and return minimal rating objects (rating 0 with empty notes). Do NOT fabricate issues.
+- If hasDialogue is true, analyze each dimension and GROUND every observation in the actual text. Every "notes" field must reference specific words, lines, or speakers from THIS selection — no generic platitudes.
+
+Dimensions to analyze (only when hasDialogue is true):
+1. voiceConsistency — Do speakers sound distinct? Rate 1-5. In "examples", quote 1-2 short lines that illustrate your rating (either a success or a failure).
+2. naturalism — Does it sound like real speech? Rate 1-5. Flag stilted phrasing, over-formality, on-the-nose beats. Quote the offenders.
+3. subtext — Is anything unsaid? Rate 1-5 (1 = all surface, 5 = rich subtext). Point to moments of implication or their absence.
+4. infoDumping — Is dialogue used to deliver exposition? detected = true if yes. Quote the exposition-heavy lines.
+5. beats — Comment on action beats, tags, and pacing between lines. Too many "he said"? Missing beats? Over-choreographed?
+
+End with "topSuggestion": ONE specific, actionable change the author could make (e.g. "Cut 'she said angrily' on line 3 — her word choice already carries the anger.").
+
+Return ONLY valid JSON (no markdown, no code blocks, no prose outside the JSON) with this exact structure:
 {
-  "voiceConsistency": { "consistent": boolean, "issues": [strings] },
-  "naturalism": { "rating": 1-5, "notes": "string" },
-  "subtext": { "present": boolean, "examples": [strings] },
-  "infoDumping": { "detected": boolean, "issues": [strings] },
-  "overallNotes": "string"
+  "hasDialogue": boolean,
+  "dialogueSummary": "string",
+  "voiceConsistency": { "rating": 1-5, "notes": "string", "examples": ["quoted line", ...] },
+  "naturalism": { "rating": 1-5, "notes": "string", "examples": ["quoted line", ...] },
+  "subtext": { "rating": 1-5, "notes": "string", "examples": ["quoted line", ...] },
+  "infoDumping": { "detected": boolean, "notes": "string", "examples": ["quoted line", ...] },
+  "beats": { "notes": "string", "examples": ["quoted line", ...] },
+  "topSuggestion": "string"
 }${styleContext}`,
   };
 
@@ -176,6 +215,7 @@ export async function POST(request: NextRequest) {
     }
 
     let result: string | DialogueCoachFeedback;
+    let changeSummary: string[] | undefined;
 
     // Parse JSON response for dialogue-coach action
     if (action === 'dialogue-coach') {
@@ -196,12 +236,26 @@ export async function POST(request: NextRequest) {
         result = responseContent.text;
       }
     } else {
-      result = responseContent.text;
+      // Rewrite actions: split revised text from optional change summary
+      const raw = responseContent.text;
+      const delimiter = '---CHANGES---';
+      const idx = raw.indexOf(delimiter);
+      if (idx >= 0) {
+        result = raw.slice(0, idx).trim();
+        const summaryBlock = raw.slice(idx + delimiter.length).trim();
+        changeSummary = summaryBlock
+          .split('\n')
+          .map((line) => line.replace(/^[-*•]\s*/, '').trim())
+          .filter((line) => line.length > 0);
+      } else {
+        result = raw;
+      }
     }
 
     return NextResponse.json({
       result,
       action,
+      changeSummary,
     });
   } catch (error) {
     console.error('Error in inline AI route:', error);

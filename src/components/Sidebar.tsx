@@ -100,7 +100,7 @@ function SortableChapterItem({
       <div
         className={`flex items-center gap-1 px-3 py-2 text-sm rounded group cursor-pointer transition-colors ${
           isActive
-            ? 'bg-[var(--color-accent-light)] text-[var(--color-accent-dark)]'
+            ? 'bg-[var(--color-accent-light)] text-[var(--color-accent-on)]'
             : 'hover:bg-[var(--color-surface)] text-[var(--color-text-primary)]'
         }`}
         onClick={() => onSelectChapter(chapter.id)}
@@ -144,7 +144,7 @@ function SortableChapterItem({
         <div className="flex-1 min-w-0">
           <span className="font-medium truncate block text-[12px]">Chapter {chapterIndex + 1}</span>
           {chapterWordCount(chapter.id) > 0 && (
-            <span className="text-[10px] text-[var(--color-text-muted)] block mt-0.5">
+            <span className={`text-[10px] block mt-0.5 ${isActive ? 'text-[var(--color-accent-on-muted)]' : 'text-[var(--color-text-muted)]'}`}>
               {chapterWordCount(chapter.id).toLocaleString()} words
             </span>
           )}
@@ -175,13 +175,13 @@ function SortableChapterItem({
               }}
               className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs rounded transition-colors group ${
                 currentSceneId === scene.id
-                  ? 'bg-[var(--color-accent-light)] text-[var(--color-accent-dark)] font-medium'
+                  ? 'bg-[var(--color-accent-light)] text-[var(--color-accent-on)] font-medium'
                   : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]'
               }`}
             >
-              <FileText size={12} className={currentSceneId === scene.id ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)]'} />
+              <FileText size={12} className={currentSceneId === scene.id ? 'text-[var(--color-accent-on)]' : 'text-[var(--color-text-muted)]'} />
               <span className="flex-1 truncate text-left">{scene.title || 'Untitled'}</span>
-              <span className="text-[10px] text-[var(--color-text-muted)]">{scene.wordCount}</span>
+              <span className={`text-[10px] ${currentSceneId === scene.id ? 'text-[var(--color-accent-on-muted)]' : 'text-[var(--color-text-muted)]'}`}>{scene.wordCount}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); onShowMenu(`scene-${scene.id}`); }}
                 className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-[var(--color-surface-alt)] rounded"

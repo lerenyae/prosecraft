@@ -17,6 +17,9 @@ html {
   --color-accent: #a89a8f;
   --color-accent-light: #c9bfb4;
   --color-accent-dark: #8b7d72;
+  /* Text colors for use ON accent-light backgrounds (active states) */
+  --color-accent-on: #2a2622;
+  --color-accent-on-muted: #5a4f44;
   --scrollbar-bg: transparent;
   --scrollbar-thumb: #d4cfc8;
   --scrollbar-thumb-hover: #a89a8f;
@@ -29,12 +32,15 @@ html {
   --color-surface-alt: #35302a;
   --color-text-primary: #f5f3f0;
   --color-text-secondary: #d4cfc8;
-  --color-text-muted: #9d9590;
+  --color-text-muted: #b5aba1;
   --color-border: #3d3835;
   --color-border-light: #2d2925;
   --color-accent: #c9bfb4;
   --color-accent-light: #a89a8f;
   --color-accent-dark: #6b5f54;
+  /* Text colors for use ON accent-light backgrounds (active states) */
+  --color-accent-on: #1a1612;
+  --color-accent-on-muted: #3d3530;
   --scrollbar-bg: transparent;
   --scrollbar-thumb: #3d3835;
   --scrollbar-thumb-hover: #4d4843;

@@ -42,10 +42,29 @@ interface DiffResponse {
   originalText: string;
   suggestedText: string;
   action: AIAction;
+  changeSummary?: string[];
+}
+
+interface DialogueDimension {
+  rating?: number;
+  notes: string;
+  examples?: string[];
+  detected?: boolean;
+}
+
+interface DialogueCoachResult {
+  hasDialogue: boolean;
+  dialogueSummary?: string;
+  voiceConsistency: DialogueDimension;
+  naturalism: DialogueDimension;
+  subtext: DialogueDimension;
+  infoDumping: DialogueDimension;
+  beats: DialogueDimension;
+  topSuggestion: string;
 }
 
 interface FeedbackResponse {
-  feedback: string;
+  feedback: string | DialogueCoachResult;
   action: 'dialogue-coach';
 }
 
@@ -54,36 +73,7 @@ type APIResponse = DiffResponse | FeedbackResponse;
 interface RawAPIResponse {
   result: string | Record<string, unknown>;
   action: string;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function formatDialogueFeedback(result: Record<string, unknown>): string {
-  const lines: string[] = [];
-  const vc = result.voiceConsistency as Record<string, unknown> | undefined;
-  const nat = result.naturalism as Record<string, unknown> | undefined;
-  const sub = result.subtext as Record<string, unknown> | undefined;
-  const info = result.infoDumping as Record<string, unknown> | undefined;
-
-  if (vc) {
-    lines.push(`Voice Consistency: ${vc.consistent ? 'Consistent' : 'Inconsistent'}`);
-    if (Array.isArray(vc.issues) && vc.issues.length) lines.push(`  Issues: ${vc.issues.join(', ')}`);
-  }
-  if (nat) {
-    lines.push(`Naturalism: ${nat.rating}/5 — ${nat.notes}`);
-  }
-  if (sub) {
-    lines.push(`Subtext: ${sub.present ? 'Present' : 'Missing'}`);
-    if (Array.isArray(sub.examples) && sub.examples.length) lines.push(`  Examples: ${sub.examples.join(', ')}`);
-  }
-  if (info) {
-    lines.push(`Info-Dumping: ${info.detected ? 'Detected' : 'Not detected'}`);
-    if (Array.isArray(info.issues) && info.issues.length) lines.push(`  Issues: ${info.issues.join(', ')}`);
-  }
-  if (result.overallNotes) lines.push(`\n${result.overallNotes}`);
-  return lines.join('\n');
+  changeSummary?: string[];
 }
 
 /** Convert plain text with \n\n paragraph breaks into TipTap-compatible HTML */
@@ -115,6 +105,166 @@ const TONE_OPTIONS: { label: string; value: ToneOption }[] = [
   { label: 'Lyrical', value: 'lyrical' },
   { label: 'Humorous', value: 'humorous' },
 ];
+
+// ============================================================================
+// Dialogue Coach — structured view with ratings, quoted examples, top suggestion
+// ============================================================================
+
+function StarRating({ rating }: { rating?: number }) {
+  const r = Math.max(0, Math.min(5, Math.round(rating ?? 0)));
+  return (
+    <span className="inline-flex items-center gap-0.5 ml-2">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span
+          key={i}
+          className={i <= r ? 'text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] opacity-40'}
+          style={{ fontSize: 11 }}
+        >
+          ●
+        </span>
+      ))}
+      <span className="text-[10px] text-[var(--color-text-muted)] ml-1">{r}/5</span>
+    </span>
+  );
+}
+
+function DialogueCard({
+  title,
+  rating,
+  notes,
+  examples,
+  flag,
+}: {
+  title: string;
+  rating?: number;
+  notes: string;
+  examples?: string[];
+  flag?: { label: string; tone: 'warn' | 'ok' };
+}) {
+  if (!notes && (!examples || examples.length === 0)) return null;
+  return (
+    <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-text-primary)]">{title}</span>
+          {typeof rating === 'number' && rating > 0 && <StarRating rating={rating} />}
+        </div>
+        {flag && (
+          <span
+            className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              flag.tone === 'warn'
+                ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300'
+                : 'bg-green-100 text-green-900 dark:bg-green-950/40 dark:text-green-300'
+            }`}
+          >
+            {flag.label}
+          </span>
+        )}
+      </div>
+      {notes && (
+        <p className="text-[13px] text-[var(--color-text-secondary)] leading-relaxed">{notes}</p>
+      )}
+      {examples && examples.length > 0 && (
+        <div className="mt-2 space-y-1">
+          {examples.map((ex, i) => (
+            <div
+              key={i}
+              className="text-[12px] italic text-[var(--color-text-secondary)] pl-3 border-l-2 border-[var(--color-accent-light)]"
+              style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+            >
+              {ex}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DialogueCoachView({ feedback }: { feedback: string | DialogueCoachResult }) {
+  // If we got a plain string back (parse failed), render it in a simple block
+  if (typeof feedback === 'string') {
+    return (
+      <div className="p-5">
+        <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Feedback</p>
+        <div className="px-5 py-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-[1.8]">
+          {feedback}
+        </div>
+      </div>
+    );
+  }
+
+  // No dialogue detected — give the user clear guidance
+  if (feedback.hasDialogue === false) {
+    return (
+      <div className="p-5">
+        <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-900 dark:text-amber-300 mb-1">
+            No dialogue found
+          </p>
+          <p className="text-[13px] text-amber-900 dark:text-amber-200 leading-relaxed">
+            {feedback.dialogueSummary || 'The selection does not appear to contain dialogue. Highlight a passage with quoted speech between characters and try again.'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-5 space-y-3">
+      {/* Top suggestion — pinned at top as the single most actionable takeaway */}
+      {feedback.topSuggestion && (
+        <div className="p-4 rounded-lg bg-[var(--color-accent-light)]/30 border border-[var(--color-accent)]">
+          <div className="flex items-start gap-2">
+            <Sparkles size={14} className="text-[var(--color-accent)] mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-accent-on)] mb-1">
+                Top suggestion
+              </p>
+              <p className="text-[13px] text-[var(--color-text-primary)] leading-relaxed">
+                {feedback.topSuggestion}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DialogueCard
+        title="Voice Consistency"
+        rating={feedback.voiceConsistency?.rating}
+        notes={feedback.voiceConsistency?.notes ?? ''}
+        examples={feedback.voiceConsistency?.examples}
+      />
+      <DialogueCard
+        title="Naturalism"
+        rating={feedback.naturalism?.rating}
+        notes={feedback.naturalism?.notes ?? ''}
+        examples={feedback.naturalism?.examples}
+      />
+      <DialogueCard
+        title="Subtext"
+        rating={feedback.subtext?.rating}
+        notes={feedback.subtext?.notes ?? ''}
+        examples={feedback.subtext?.examples}
+      />
+      <DialogueCard
+        title="Info-Dumping"
+        notes={feedback.infoDumping?.notes ?? ''}
+        examples={feedback.infoDumping?.examples}
+        flag={
+          feedback.infoDumping?.detected
+            ? { label: 'Detected', tone: 'warn' }
+            : { label: 'Clean', tone: 'ok' }
+        }
+      />
+      <DialogueCard
+        title="Beats & Pacing"
+        notes={feedback.beats?.notes ?? ''}
+        examples={feedback.beats?.examples}
+      />
+    </div>
+  );
+}
 
 // ============================================================================
 // Centered Modal Overlay — fixed viewport, scrollable body, sticky footer
@@ -181,6 +331,25 @@ function FloatingOverlay({ response, editor: _editor, onAccept, onReject }: Floa
           {/* Diff View — manuscript formatted */}
           {isDiff && (
             <div className="p-5 space-y-4">
+              {/* Change summary — high-level recap of what's being flagged */}
+              {(response as DiffResponse).changeSummary && (response as DiffResponse).changeSummary!.length > 0 && (
+                <div className="p-4 rounded-lg bg-[var(--color-accent-light)]/20 border border-[var(--color-accent)]/40">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Sparkles size={12} className="text-[var(--color-accent)]" />
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-primary)]">
+                      What's changing ({(response as DiffResponse).changeSummary!.length})
+                    </p>
+                  </div>
+                  <ul className="space-y-1">
+                    {(response as DiffResponse).changeSummary!.map((bullet, i) => (
+                      <li key={i} className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed flex gap-2">
+                        <span className="text-[var(--color-accent)] flex-shrink-0">•</span>
+                        <span>{bullet}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div>
                 <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Original</p>
                 <div
@@ -237,15 +406,8 @@ function FloatingOverlay({ response, editor: _editor, onAccept, onReject }: Floa
             </div>
           )}
 
-          {/* Feedback View */}
-          {isFeedback && (
-            <div className="p-5">
-              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Feedback</p>
-              <div className="px-5 py-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200/40 dark:border-blue-900/30 text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-[1.8]">
-                {(response as FeedbackResponse).feedback}
-              </div>
-            </div>
-          )}
+          {/* Feedback View — structured Dialogue Coach */}
+          {isFeedback && <DialogueCoachView feedback={(response as FeedbackResponse).feedback} />}
         </div>
 
         {/* Sticky Footer */}
@@ -332,17 +494,17 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
 
       let data: APIResponse;
       if (action === 'dialogue-coach') {
-        const feedbackText = typeof raw.result === 'string'
-          ? raw.result
-          : (raw.result as Record<string, unknown>).overallNotes
-            ? formatDialogueFeedback(raw.result as Record<string, unknown>)
-            : JSON.stringify(raw.result, null, 2);
-        data = { feedback: feedbackText, action: 'dialogue-coach' };
+        // Keep the structured object if it parsed as one; fall back to raw string
+        const feedback = typeof raw.result === 'object'
+          ? (raw.result as unknown as DialogueCoachResult)
+          : (raw.result as string);
+        data = { feedback, action: 'dialogue-coach' };
       } else {
         data = {
           originalText: selectedText,
           suggestedText: typeof raw.result === 'string' ? raw.result : String(raw.result),
           action,
+          changeSummary: raw.changeSummary,
         };
       }
 
