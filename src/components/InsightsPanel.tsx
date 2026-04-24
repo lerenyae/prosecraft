@@ -19,6 +19,9 @@ import {
   Search,
   Sparkles,
   ArrowRight,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -83,7 +86,14 @@ export default function InsightsPanel() {
     chapterScenes,
     projectWordCount,
     setHighlightWord,
+    updateProject,
   } = useStore();
+
+  // Inline goal editing
+  const [isEditingGoal, setIsEditingGoal] = useState(false);
+  const [draftGoal, setDraftGoal] = useState<number>(0);
+  const [draftDeadline, setDraftDeadline] = useState<string>('');
+  const [draftDailyGoal, setDraftDailyGoal] = useState<number>(0);
 
   const [sessionStartWords, setSessionStartWords] = useState<number | null>(null);
   const [grammarEnabled, setGrammarEnabled] = useState(false);
@@ -400,49 +410,146 @@ export default function InsightsPanel() {
 
       {/* Manuscript Goal */}
       <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
-        <div className="flex items-center gap-2 mb-3">
-          <Target size={14} className="text-[var(--color-accent)]" />
-          <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Manuscript Goal</p>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Target size={14} className="text-[var(--color-accent)]" />
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Manuscript Goal</p>
+          </div>
+          {!isEditingGoal && (
+            <button
+              onClick={() => {
+                setDraftGoal(goal);
+                setDraftDeadline(goalDeadline);
+                setDraftDailyGoal(dailyGoal);
+                setIsEditingGoal(true);
+              }}
+              className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-primary)] transition-colors"
+              title="Edit goal"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative flex-shrink-0">
-            <svg width="84" height="84" viewBox="0 0 84 84">
-              <circle
-                cx="42" cy="42" r={radius}
-                fill="none"
-                stroke="var(--color-border)"
-                strokeWidth="6"
-              />
-              <circle
-                cx="42" cy="42" r={radius}
-                fill="none"
-                stroke="var(--color-accent)"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                transform="rotate(-90 42 42)"
-                style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-sm font-bold text-[var(--color-accent)]">{progress}%</span>
+
+        {!isEditingGoal ? (
+          <div className="flex items-center gap-4">
+            <div className="relative flex-shrink-0">
+              <svg width="84" height="84" viewBox="0 0 84 84">
+                <circle
+                  cx="42" cy="42" r={radius}
+                  fill="none"
+                  stroke="var(--color-border)"
+                  strokeWidth="6"
+                />
+                <circle
+                  cx="42" cy="42" r={radius}
+                  fill="none"
+                  stroke="var(--color-accent)"
+                  strokeWidth="6"
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={strokeDashoffset}
+                  transform="rotate(-90 42 42)"
+                  style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-sm font-bold text-[var(--color-accent)]">{progress}%</span>
+              </div>
+            </div>
+            <div>
+              <p className="text-xl font-bold text-[var(--color-text-primary)]">
+                {projectWordCount.toLocaleString()}
+              </p>
+              <p className="text-sm text-[var(--color-text-muted)]">
+                of {goal.toLocaleString()} words
+              </p>
+              {projectWordCount < goal && (
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                  {(goal - projectWordCount).toLocaleString()} remaining
+                </p>
+              )}
             </div>
           </div>
-          <div>
-            <p className="text-xl font-bold text-[var(--color-text-primary)]">
-              {projectWordCount.toLocaleString()}
-            </p>
-            <p className="text-sm text-[var(--color-text-muted)]">
-              of {goal.toLocaleString()} words
-            </p>
-            {projectWordCount < goal && (
-              <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                {(goal - projectWordCount).toLocaleString()} remaining
-              </p>
-            )}
+        ) : (
+          <div className="flex flex-col gap-3">
+            {/* Presets */}
+            <div className="flex gap-1.5">
+              {[
+                { label: 'Short', value: 7500 },
+                { label: 'Novella', value: 30000 },
+                { label: 'Novel', value: 80000 },
+                { label: 'Epic', value: 120000 },
+              ].map(p => (
+                <button
+                  key={p.value}
+                  onClick={() => setDraftGoal(p.value)}
+                  className={`flex-1 px-1.5 py-1 rounded text-[10px] font-medium border transition-colors ${
+                    draftGoal === p.value
+                      ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+                      : 'bg-[var(--color-bg-primary)] text-[var(--color-text-secondary)] border-[var(--color-border)] hover:bg-[var(--color-surface-alt)]'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="block">
+              <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Total Words</span>
+              <input
+                type="number"
+                value={draftGoal}
+                onChange={e => setDraftGoal(Number(e.target.value))}
+                className="mt-1 w-full px-2 py-1.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Deadline</span>
+              <input
+                type="date"
+                value={draftDeadline}
+                onChange={e => setDraftDeadline(e.target.value)}
+                className="mt-1 w-full px-2 py-1.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Daily Goal</span>
+              <input
+                type="number"
+                value={draftDailyGoal}
+                onChange={e => setDraftDailyGoal(Number(e.target.value))}
+                className="mt-1 w-full px-2 py-1.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-xs text-[var(--color-text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-accent)]"
+              />
+            </label>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setIsEditingGoal(false)}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-[var(--color-text-secondary)] bg-[var(--color-bg-primary)] border border-[var(--color-border)] hover:bg-[var(--color-surface-alt)] transition-colors"
+              >
+                <X size={12} /> Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (currentProject) {
+                    updateProject(currentProject.id, {
+                      wordCountGoal: draftGoal,
+                      goalDeadline: draftDeadline || undefined,
+                      dailyGoal: draftDailyGoal || undefined,
+                    } as any);
+                  }
+                  setIsEditingGoal(false);
+                }}
+                className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium bg-[var(--color-accent)] text-white hover:opacity-90 transition-colors"
+              >
+                <Check size={12} /> Save
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Daily Goal & Deadline */}
