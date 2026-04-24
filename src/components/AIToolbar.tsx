@@ -14,9 +14,9 @@ import {
   Loader2,
   Check,
   X,
-  ChevronDown,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { getWriterProfile, getStyleProfile } from '@/lib/personalization';
 
 // ============================================================================
 // Types
@@ -100,7 +100,7 @@ function textToHTML(text: string): string {
 
 const ACTION_BUTTONS: { icon: typeof Sparkles; label: string; action: AIAction; description: string }[] = [
   { icon: Sparkles, label: 'Improve Prose', action: 'improve', description: 'Elevate the writing quality' },
-  { icon: Eye, label: 'Show Don\'t Tell', action: 'show-dont-tell', description: 'Convert telling to showing' },
+  { icon: Eye, label: "Show Don't Tell", action: 'show-dont-tell', description: 'Convert telling to showing' },
   { icon: Scissors, label: 'Tighten', action: 'tighten', description: 'Remove unnecessary words' },
   { icon: Maximize2, label: 'Expand', action: 'expand', description: 'Add detail and depth' },
   { icon: Palette, label: 'Change Tone', action: 'change-tone', description: 'Shift the emotional register' },
@@ -117,7 +117,7 @@ const TONE_OPTIONS: { label: string; value: ToneOption }[] = [
 ];
 
 // ============================================================================
-// Floating Overlay Component (portaled to body, positioned near selection)
+// Centered Modal Overlay — fixed viewport, scrollable body, sticky footer
 // ============================================================================
 
 interface FloatingOverlayProps {
@@ -127,44 +127,8 @@ interface FloatingOverlayProps {
   onReject: () => void;
 }
 
-function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverlayProps) {
+function FloatingOverlay({ response, editor: _editor, onAccept, onReject }: FloatingOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  // Position the overlay near the selection
-  useEffect(() => {
-    const editorEl = editor.view.dom.closest('.mx-auto') as HTMLElement | null;
-    if (!editorEl) {
-      setPosition({ top: 200, left: window.innerWidth / 2 - 320, width: 640 });
-      return;
-    }
-
-    const containerRect = editorEl.getBoundingClientRect();
-
-    try {
-      const { from, to } = editor.state.selection;
-      if (from !== to) {
-        const endCoords = editor.view.coordsAtPos(to);
-        // Place below the selection end, aligned to the editor column
-        const top = endCoords.bottom + 12;
-        setPosition({
-          top: Math.min(top, window.innerHeight - 400),
-          left: containerRect.left,
-          width: containerRect.width,
-        });
-        return;
-      }
-    } catch {
-      // Fall through to fallback
-    }
-
-    // Fallback: center on editor column, partway down viewport
-    setPosition({
-      top: containerRect.top + 120,
-      left: containerRect.left,
-      width: containerRect.width,
-    });
-  }, [editor]);
 
   // Escape key to dismiss
   useEffect(() => {
@@ -175,46 +139,25 @@ function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverl
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onReject]);
 
-  // Click outside to dismiss
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (overlayRef.current && !overlayRef.current.contains(e.target as Node)) {
-        onReject();
-      }
-    };
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 200);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [onReject]);
-
-  if (!position) return null;
-
   const isDiff = 'suggestedText' in response;
   const isFeedback = 'feedback' in response;
 
   const overlay = (
     <div
-      ref={overlayRef}
-      className="fixed z-[9999]"
-      style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
-        width: `${position.width}px`,
-      }}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onReject}
     >
-      {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/10 -z-10" />
-
       <div
-        className="bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-xl overflow-hidden"
-        style={{ boxShadow: '0 25px 60px -12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06)' }}
+        ref={overlayRef}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-2xl bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-xl flex flex-col overflow-hidden"
+        style={{
+          maxHeight: '85vh',
+          boxShadow: '0 25px 60px -12px rgba(0,0,0,0.3), 0 0 0 1px rgba(0,0,0,0.06)',
+        }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        {/* Header (sticky by virtue of flex) */}
+        <div className="flex-shrink-0 flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-[var(--color-accent)]" />
             <span className="text-xs font-semibold text-[var(--color-text-primary)] uppercase tracking-wide">
@@ -233,79 +176,80 @@ function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverl
           </div>
         </div>
 
-        {/* Diff View — manuscript formatted */}
-        {isDiff && (
-          <div className="p-5 space-y-4 max-h-[50vh] overflow-y-auto">
-            {/* Original */}
-            <div>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Original</p>
-              <div
-                className="px-5 py-4 rounded-lg bg-red-50/50 dark:bg-red-950/10 border border-red-200/40 dark:border-red-900/30"
-                style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
-              >
-                {(response as DiffResponse).originalText.split(/\n\n+/).map((para, i) => (
-                  <p
-                    key={i}
-                    className="text-sm leading-[1.9] text-[var(--color-text-secondary)]"
-                    style={{
-                      marginTop: i > 0 ? '1em' : 0,
-                      textIndent: i > 0 ? '2em' : 0,
-                      textDecoration: 'line-through',
-                      textDecorationColor: 'rgba(239,68,68,0.35)',
-                    }}
-                  >
-                    {para.split(/\n/).map((line, j) => (
-                      <span key={j}>
-                        {j > 0 && <br />}
-                        {line}
-                      </span>
-                    ))}
-                  </p>
-                ))}
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Diff View — manuscript formatted */}
+          {isDiff && (
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Original</p>
+                <div
+                  className="px-5 py-4 rounded-lg bg-red-50/50 dark:bg-red-950/10 border border-red-200/40 dark:border-red-900/30"
+                  style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+                >
+                  {(response as DiffResponse).originalText.split(/\n\n+/).map((para, i) => (
+                    <p
+                      key={i}
+                      className="text-sm leading-[1.9] text-[var(--color-text-secondary)]"
+                      style={{
+                        marginTop: i > 0 ? '1em' : 0,
+                        textIndent: i > 0 ? '2em' : 0,
+                        textDecoration: 'line-through',
+                        textDecorationColor: 'rgba(239,68,68,0.35)',
+                      }}
+                    >
+                      {para.split(/\n/).map((line, j) => (
+                        <span key={j}>
+                          {j > 0 && <br />}
+                          {line}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Suggested</p>
+                <div
+                  className="px-5 py-4 rounded-lg bg-green-50/50 dark:bg-green-950/10 border border-green-200/40 dark:border-green-900/30"
+                  style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
+                >
+                  {(response as DiffResponse).suggestedText.split(/\n\n+/).map((para, i) => (
+                    <p
+                      key={i}
+                      className="text-sm leading-[1.9] text-[var(--color-text-primary)]"
+                      style={{
+                        marginTop: i > 0 ? '1em' : 0,
+                        textIndent: i > 0 ? '2em' : 0,
+                      }}
+                    >
+                      {para.split(/\n/).map((line, j) => (
+                        <span key={j}>
+                          {j > 0 && <br />}
+                          {line}
+                        </span>
+                      ))}
+                    </p>
+                  ))}
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Suggested */}
-            <div>
-              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Suggested</p>
-              <div
-                className="px-5 py-4 rounded-lg bg-green-50/50 dark:bg-green-950/10 border border-green-200/40 dark:border-green-900/30"
-                style={{ fontFamily: 'Georgia, "Times New Roman", serif' }}
-              >
-                {(response as DiffResponse).suggestedText.split(/\n\n+/).map((para, i) => (
-                  <p
-                    key={i}
-                    className="text-sm leading-[1.9] text-[var(--color-text-primary)]"
-                    style={{
-                      marginTop: i > 0 ? '1em' : 0,
-                      textIndent: i > 0 ? '2em' : 0,
-                    }}
-                  >
-                    {para.split(/\n/).map((line, j) => (
-                      <span key={j}>
-                        {j > 0 && <br />}
-                        {line}
-                      </span>
-                    ))}
-                  </p>
-                ))}
+          {/* Feedback View */}
+          {isFeedback && (
+            <div className="p-5">
+              <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Feedback</p>
+              <div className="px-5 py-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200/40 dark:border-blue-900/30 text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-[1.8]">
+                {(response as FeedbackResponse).feedback}
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
-        {/* Feedback View */}
-        {isFeedback && (
-          <div className="p-5 max-h-[50vh] overflow-y-auto">
-            <p className="text-[10px] text-[var(--color-text-muted)] font-semibold uppercase tracking-wider mb-2">Feedback</p>
-            <div className="px-5 py-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/10 border border-blue-200/40 dark:border-blue-900/30 text-sm text-[var(--color-text-secondary)] whitespace-pre-wrap leading-[1.8]">
-              {(response as FeedbackResponse).feedback}
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex gap-3 px-5 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+        {/* Sticky Footer */}
+        <div className="flex-shrink-0 flex gap-3 px-5 py-4 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
           {isDiff && (
             <button
               onClick={onAccept}
@@ -327,7 +271,6 @@ function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverl
     </div>
   );
 
-  // Portal to body so it's not clipped by any parent overflow
   if (typeof document !== 'undefined') {
     return createPortal(overlay, document.body);
   }
@@ -335,7 +278,7 @@ function FloatingOverlay({ response, editor, onAccept, onReject }: FloatingOverl
 }
 
 // ============================================================================
-// AI Panel Component (lives in right sidebar)
+// Vertical Side Rail — icon-only buttons on the right edge of the editor
 // ============================================================================
 
 export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
@@ -345,6 +288,7 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
   const [response, setResponse] = useState<APIResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showToneMenu, setShowToneMenu] = useState(false);
+  const [activeAction, setActiveAction] = useState<AIAction | null>(null);
 
   // Get surrounding context from editor
   const getContext = useCallback((): string => {
@@ -364,6 +308,7 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
     setError(null);
     setResponse(null);
     setShowToneMenu(false);
+    setActiveAction(action);
 
     try {
       const res = await fetch('/api/ai/inline', {
@@ -375,6 +320,8 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
           context: getContext(),
           genre: currentProject.genre,
           toneTarget,
+          writerProfile: getWriterProfile(),
+          styleProfile: getStyleProfile(currentProject.id),
         }),
       });
 
@@ -403,15 +350,13 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsLoading(false);
+      setActiveAction(null);
     }
   }, [selectedText, currentProject, editor, getContext]);
 
-  // Accept suggestion — replace selected text with proper paragraph formatting
   const handleAccept = useCallback(() => {
     if (!editor || !response || !('suggestedText' in response)) return;
-
     const { from, to } = editor.state.selection;
-    // Convert plain text paragraph breaks into proper HTML paragraphs for TipTap
     const html = textToHTML(response.suggestedText);
     editor.chain().focus().deleteRange({ from, to }).insertContent(html).run();
     setResponse(null);
@@ -423,69 +368,61 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
 
   const handleAction = useCallback((action: AIAction) => {
     if (action === 'change-tone') {
-      setShowToneMenu(!showToneMenu);
+      setShowToneMenu((prev) => !prev);
     } else {
       callAIAPI(action);
     }
-  }, [callAIAPI, showToneMenu]);
+  }, [callAIAPI]);
 
   const hasSelection = selectedText.length > 5;
 
   return (
-    <div className="flex flex-col overflow-y-auto">
-      {/* Selection Preview */}
-      <div className="p-4 border-b border-[var(--color-border)]">
-        {hasSelection ? (
-          <div>
-            <p className="text-[10px] text-[var(--color-text-muted)] font-medium uppercase tracking-wide mb-2">Selected Text</p>
-            <div className="p-2.5 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-text-secondary)] leading-relaxed max-h-24 overflow-y-auto">
-              {selectedText.length > 300 ? selectedText.slice(0, 300) + '...' : selectedText}
-            </div>
-          </div>
-        ) : (
-          <div className="text-center py-4">
-            <Sparkles size={20} className="text-[var(--color-text-muted)] mx-auto mb-2" />
-            <p className="text-xs text-[var(--color-text-muted)]">
-              Highlight text in the editor to use AI tools
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div className="p-3 flex flex-col gap-1">
+    <>
+      {/* Vertical icon rail on the right edge of the editor */}
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-1 p-1.5 rounded-xl bg-[var(--color-bg-primary)]/95 backdrop-blur-sm border border-[var(--color-border)] shadow-sm">
         {ACTION_BUTTONS.map((btn) => {
           const Icon = btn.icon;
+          const isActiveSpinner = isLoading && activeAction === btn.action;
           const isTone = btn.action === 'change-tone';
+          const disabled = !hasSelection || isLoading;
 
           return (
-            <div key={btn.action}>
+            <div key={btn.action} className="relative group">
               <button
                 onClick={() => handleAction(btn.action)}
-                disabled={!hasSelection || isLoading}
-                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all ${
-                  hasSelection && !isLoading
-                    ? 'hover:bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
-                    : 'text-[var(--color-text-muted)] opacity-50 cursor-not-allowed'
+                disabled={disabled}
+                className={`flex items-center justify-center w-9 h-9 rounded-lg transition-all ${
+                  disabled
+                    ? 'text-[var(--color-text-muted)] opacity-40 cursor-not-allowed'
+                    : isTone && showToneMenu
+                      ? 'bg-[var(--color-accent)] text-[var(--color-bg-primary)]'
+                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-primary)]'
                 }`}
+                title={btn.label}
+                aria-label={btn.label}
               >
-                <Icon size={15} className="flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium">{btn.label}</p>
-                  <p className="text-[10px] text-[var(--color-text-muted)] truncate">{btn.description}</p>
-                </div>
-                {isTone && hasSelection && <ChevronDown size={12} className={`flex-shrink-0 transition-transform ${showToneMenu ? 'rotate-180' : ''}`} />}
+                {isActiveSpinner ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Icon size={16} />
+                )}
               </button>
 
-              {/* Tone submenu */}
+              {/* Tooltip on hover (shows to the left) */}
+              <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 px-2 py-1 bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-[var(--color-text-primary)] text-[11px] rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-sm z-30">
+                <div className="font-medium">{btn.label}</div>
+                <div className="text-[10px] text-[var(--color-text-muted)]">{btn.description}</div>
+              </div>
+
+              {/* Tone submenu (appears to the left when expanded) */}
               {isTone && showToneMenu && (
-                <div className="ml-8 mt-1 mb-1 flex flex-wrap gap-1.5">
+                <div className="absolute right-full top-0 mr-2 flex flex-col gap-1 p-1.5 rounded-lg bg-[var(--color-bg-primary)] border border-[var(--color-border)] shadow-sm z-30">
                   {TONE_OPTIONS.map((tone) => (
                     <button
                       key={tone.value}
                       onClick={() => callAIAPI('change-tone', tone.value)}
-                      disabled={!hasSelection || isLoading}
-                      className="px-2.5 py-1 rounded-md text-[10px] font-medium bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:border-[var(--color-accent)] transition-colors"
+                      disabled={disabled}
+                      className="px-3 py-1.5 rounded-md text-[11px] font-medium text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)] hover:text-[var(--color-text-primary)] transition-colors whitespace-nowrap text-left"
                     >
                       {tone.label}
                     </button>
@@ -497,28 +434,23 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
         })}
       </div>
 
-      {/* Loading State */}
-      {isLoading && (
-        <div className="px-4 py-6 flex items-center justify-center gap-2">
-          <Loader2 size={16} className="animate-spin text-[var(--color-accent)]" />
-          <span className="text-xs text-[var(--color-text-muted)]">Processing...</span>
-        </div>
-      )}
-
-      {/* Error State */}
+      {/* Error toast (centered at top of editor) */}
       {error && (
-        <div className="mx-4 mb-3 p-3 rounded-lg bg-red-100 dark:bg-red-950/30 border border-red-300 dark:border-red-800">
-          <p className="text-xs text-red-800 dark:text-red-300">{error}</p>
-          <button
-            onClick={() => setError(null)}
-            className="mt-1 text-[10px] text-red-600 dark:text-red-400 hover:underline"
-          >
-            Dismiss
-          </button>
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg bg-red-100 dark:bg-red-950/40 border border-red-300 dark:border-red-800 shadow-sm max-w-md">
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-red-800 dark:text-red-300 flex-1">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="text-red-600 dark:text-red-400 hover:text-red-700"
+              aria-label="Dismiss error"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Floating Overlay — portaled to body so it's not clipped */}
+      {/* Centered scrollable modal for AI suggestions */}
       {response && editor && (
         <FloatingOverlay
           response={response}
@@ -527,7 +459,7 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
           onReject={handleReject}
         />
       )}
-    </div>
+    </>
   );
 }
 
