@@ -13,6 +13,7 @@ import {
   Plus,
   ChevronDown,
   ChevronUp,
+  BookOpen,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 
@@ -31,6 +32,28 @@ interface MemoryEntry {
   text: string;
   createdAt: number;
   source: 'auto' | 'manual';
+}
+
+interface ChapterSummary {
+  chapterId: string;
+  title: string;
+  summary: string;
+  contentHash: string;
+  generatedAt: number;
+}
+
+// Budget for manuscript text within the system prompt (leaving headroom for
+// persona, memory, current chapter full text, messages, response).
+// Rough token estimate: ~4 chars/token, so 360K chars ≈ 90K tokens.
+const FULL_TEXT_BUDGET_CHARS = 360_000;
+
+function fastHash(s: string): string {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h.toString(36) + ':' + s.length.toString(36);
 }
 
 // ============================================================================
@@ -68,6 +91,39 @@ function saveMemoryBank(projectId: string, entries: MemoryEntry[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem(`prosecraft-memory-${projectId}`, JSON.stringify(entries));
+  } catch { /* noop */ }
+}
+
+function loadSummaries(projectId: string): Record<string, ChapterSummary> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const stored = localStorage.getItem(`prosecraft-summaries-${projectId}`);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveSummaries(projectId: string, map: Record<string, ChapterSummary>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`prosecraft-summaries-${projectId}`, JSON.stringify(map));
+  } catch { /* noop */ }
+}
+
+function loadWholeBook(projectId: string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem(`prosecraft-wholebook-${projectId}`) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveWholeBook(projectId: string, on: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(`prosecraft-wholebook-${projectId}`, on ? '1' : '0');
   } catch { /* noop */ }
 }
 
@@ -246,6 +302,8 @@ export default function ChatPanel() {
   const [contextRefreshed, setContextRefreshed] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [wholeBook, setWholeBook] = useState(false);
+  const [summarizing, setSummarizing] = useState<string | null>(null); // chapter id being summarized
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -268,8 +326,10 @@ export default function ChatPanel() {
     if (projectId) {
       const stored = loadMemoryBank(projectId);
       setMemories(stored);
+      setWholeBook(loadWholeBook(projectId));
     } else {
       setMemories([]);
+      setWholeBook(false);
     }
   }, [projectId]);
 
@@ -291,6 +351,91 @@ export default function ChatPanel() {
     const scenes = chapterScenes(chapter.id);
     return scenes.map(s => s.content || '').join('\n\n');
   }, [chapter, chapterScenes]);
+
+  // Build per-chapter plain text map across the whole project.
+  const getChapterPlainText = useCallback(
+    (chapterId: string): string => {
+      const scenes = chapterScenes(chapterId);
+      return stripHtml(scenes.map(s => s.content || '').join('\n\n'));
+    },
+    [chapterScenes]
+  );
+
+  // Build the whole-book payload. Returns { context, mode }.
+  // Uses full text if it fits; otherwise falls back to cached summaries,
+  // generating any missing/stale ones via /api/ai/summarize.
+  const buildWholeBookContext = useCallback(async (): Promise<{ context: string; mode: 'full' | 'summaries' }> => {
+    // Collect plain text per chapter, in order.
+    const perChapter = projectChapters.map(ch => ({
+      id: ch.id,
+      title: ch.title,
+      text: getChapterPlainText(ch.id),
+    }));
+
+    const totalChars = perChapter.reduce((sum, c) => sum + c.text.length, 0);
+
+    // Fits in budget -> send full text.
+    if (totalChars <= FULL_TEXT_BUDGET_CHARS) {
+      const blocks = perChapter.map((c, i) => {
+        const pos = `Chapter ${i + 1}${c.title ? ` — ${c.title}` : ''}`;
+        return `[${pos}]\n${c.text || '(empty)'}`;
+      });
+      return { context: blocks.join('\n\n===\n\n'), mode: 'full' };
+    }
+
+    // Too big -> use/generate summaries.
+    const cached = loadSummaries(projectId);
+    const updated: Record<string, ChapterSummary> = { ...cached };
+    let cacheDirty = false;
+
+    for (const c of perChapter) {
+      const hash = fastHash(c.text);
+      const existing = cached[c.id];
+      if (existing && existing.contentHash === hash) continue;
+      // Need fresh summary.
+      setSummarizing(c.id);
+      try {
+        const res = await fetch('/api/ai/summarize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chapterTitle: c.title,
+            chapterContent: c.text,
+            genre: currentProject?.genre,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          updated[c.id] = {
+            chapterId: c.id,
+            title: c.title,
+            summary: data.summary || '(unavailable)',
+            contentHash: hash,
+            generatedAt: Date.now(),
+          };
+          cacheDirty = true;
+        }
+      } catch {
+        // keep going; the chapter will just be missing from the payload
+      }
+    }
+    setSummarizing(null);
+
+    if (cacheDirty) saveSummaries(projectId, updated);
+
+    const blocks = perChapter.map((c, i) => {
+      const pos = `Chapter ${i + 1}${c.title ? ` — ${c.title}` : ''}`;
+      const s = updated[c.id]?.summary || '(no summary available)';
+      return `[${pos}]\n${s}`;
+    });
+    return { context: blocks.join('\n\n===\n\n'), mode: 'summaries' };
+  }, [projectChapters, getChapterPlainText, projectId, currentProject]);
+
+  const toggleWholeBook = useCallback(() => {
+    const next = !wholeBook;
+    setWholeBook(next);
+    if (projectId) saveWholeBook(projectId, next);
+  }, [wholeBook, projectId]);
 
   const copyToClipboard = useCallback(async (text: string, index: number) => {
     try {
@@ -365,6 +510,20 @@ export default function ChatPanel() {
         ? memories.map(m => m.text).join('; ')
         : undefined;
 
+      // Optionally build whole-book context (hybrid: full text if it fits,
+      // summaries otherwise).
+      let wholeBookContext: string | undefined;
+      let wholeBookMode: 'full' | 'summaries' | 'off' = 'off';
+      if (wholeBook && projectChapters.length > 1) {
+        try {
+          const built = await buildWholeBookContext();
+          wholeBookContext = built.context;
+          wholeBookMode = built.mode;
+        } catch {
+          wholeBookMode = 'off';
+        }
+      }
+
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -375,6 +534,8 @@ export default function ChatPanel() {
           genre: currentProject.genre,
           chapterPosition: position,
           memoryContext,
+          wholeBookContext,
+          wholeBookMode,
         }),
       });
 
@@ -398,7 +559,7 @@ export default function ChatPanel() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, currentProject, chapter, chapterId, messages, projectChapters, getChapterContent, memories, extractMemories]);
+  }, [input, loading, currentProject, chapter, chapterId, messages, projectChapters, getChapterContent, memories, extractMemories, wholeBook, buildWholeBookContext]);
 
   const refreshContext = useCallback(() => {
     setContextRefreshed(true);
@@ -438,6 +599,23 @@ export default function ChatPanel() {
           <p className="text-[10px] text-[var(--color-text-muted)]">{wordCount.toLocaleString()} words</p>
         </div>
         <div className="flex items-center gap-1">
+          <button
+            onClick={toggleWholeBook}
+            title={
+              wholeBook
+                ? 'Whole Book ON — AI reads every chapter. Click to scope to this chapter only.'
+                : 'Whole Book OFF — AI only reads this chapter. Click to give it the full manuscript.'
+            }
+            disabled={projectChapters.length <= 1}
+            className={`flex items-center gap-1 px-1.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+              wholeBook
+                ? 'text-[var(--color-accent-on)] bg-[var(--color-accent)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+            } ${projectChapters.length <= 1 ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            <BookOpen size={12} />
+            <span>Whole Book</span>
+          </button>
           <button
             onClick={refreshContext}
             title="Re-read chapter (refreshes AI context)"
@@ -571,7 +749,9 @@ export default function ChatPanel() {
           </button>
         </div>
         <p className="text-[9px] text-[var(--color-text-muted)] mt-1 px-1">
-          Shift+Enter for new line. AI reads the full chapter each message.
+          Shift+Enter for new line. {wholeBook
+            ? `Whole Book ON — AI reads all ${projectChapters.length} chapters${summarizing ? ' (summarizing…)' : ''}.`
+            : 'AI reads the full chapter each message.'}
           {memories.length > 0 && ` ${memories.length} memories loaded.`}
         </p>
       </div>

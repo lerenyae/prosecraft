@@ -45,6 +45,24 @@ import SearchReplace from '@/components/SearchReplace';
 
 const searchHighlightKey = new PluginKey('searchHighlight');
 
+// Build a regex for the search term. Single words get word boundaries so
+// "felt" doesn't match "felted". Phrases (anything with whitespace) drop
+// boundaries and allow flexible whitespace/quote/ellipsis matching so quoted
+// sentences from AI suggestions find their source even if the AI normalized
+// smart quotes or collapsed a double-space.
+function buildSearchRegex(term: string): RegExp {
+  let pattern = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Interchangeable straight/curly quotes
+  pattern = pattern.replace(/['\u2018\u2019]/g, "['\u2018\u2019]");
+  pattern = pattern.replace(/["\u201C\u201D]/g, '["\u201C\u201D]');
+  // Ellipsis char and triple dot interchangeable
+  pattern = pattern.replace(/\\\.\\\.\\\.|\u2026/g, '(?:\\.{3}|\u2026)');
+  // Flexible whitespace — any run of spaces/tabs/newlines matches
+  pattern = pattern.replace(/\s+/g, '\\s+');
+  const isPhrase = /\s/.test(term);
+  return new RegExp(isPhrase ? pattern : `\\b${pattern}\\b`, 'gi');
+}
+
 function createSearchHighlightExtension() {
   return Extension.create({
     name: 'searchHighlight',
@@ -78,7 +96,7 @@ function createSearchHighlightExtension() {
                 }
                 ext.storage.searchTerm = searchTerm;
                 const decorations: Decoration[] = [];
-                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+                const regex = buildSearchRegex(searchTerm);
                 tr.doc.descendants((node, pos) => {
                   if (!node.isText || !node.text) return;
                   let match;
@@ -103,7 +121,7 @@ function createSearchHighlightExtension() {
               if (tr.docChanged && ext.storage.searchTerm) {
                 const searchTerm = ext.storage.searchTerm;
                 const decorations: Decoration[] = [];
-                const regex = new RegExp(`\\b${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+                const regex = buildSearchRegex(searchTerm);
                 tr.doc.descendants((node, pos) => {
                   if (!node.isText || !node.text) return;
                   let match;
@@ -207,8 +225,13 @@ function SearchBar({ editor, searchTerm, onClose }: { editor: TipTapEditor; sear
   return (
     <div className="flex items-center gap-2 px-4 py-1.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
       <Search size={14} className="text-[var(--color-text-muted)] flex-shrink-0" />
-      <span className="text-sm font-medium text-[var(--color-accent)]">&ldquo;{searchTerm}&rdquo;</span>
-      <span className="text-xs text-[var(--color-text-muted)]">
+      <span
+        className="text-sm font-medium text-[var(--color-accent)] truncate min-w-0 max-w-[60%]"
+        title={searchTerm}
+      >
+        &ldquo;{searchTerm.length > 60 ? `${searchTerm.slice(0, 60)}…` : searchTerm}&rdquo;
+      </span>
+      <span className="text-xs text-[var(--color-text-muted)] flex-shrink-0">
         {totalMatches > 0 ? `${activeIndex + 1}/${totalMatches}` : 'No matches'}
       </span>
       <div className="flex items-center gap-0.5 ml-auto">

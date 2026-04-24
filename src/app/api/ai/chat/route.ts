@@ -13,6 +13,8 @@ interface ChatRequest {
   genre?: string;
   chapterPosition?: string;
   memoryContext?: string;
+  wholeBookContext?: string;
+  wholeBookMode?: 'full' | 'summaries' | 'off';
 }
 
 function stripHtml(html: string): string {
@@ -57,7 +59,7 @@ function getEditorialPersona(genre?: string): string {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as ChatRequest;
-    const { messages, chapterContent, chapterTitle, genre, chapterPosition, memoryContext } = body;
+    const { messages, chapterContent, chapterTitle, genre, chapterPosition, memoryContext, wholeBookContext, wholeBookMode } = body;
 
     if (!messages || messages.length === 0) {
       return NextResponse.json({ error: 'No messages provided' }, { status: 400 });
@@ -74,18 +76,33 @@ export async function POST(request: NextRequest) {
       ? `\n\nPROJECT MEMORY (facts the author has established across sessions):\n${memoryContext}\n\nUse these facts to maintain consistency. Reference them when relevant but do not repeat them back verbatim unless asked.`
       : '';
 
+    // Whole-book context block
+    let wholeBookSection = '';
+    let wholeBookRule = '';
+    if (wholeBookContext && wholeBookMode && wholeBookMode !== 'off') {
+      const modeLabel =
+        wholeBookMode === 'full'
+          ? 'FULL MANUSCRIPT TEXT (all chapters verbatim)'
+          : 'MANUSCRIPT CONTINUITY NOTES (per-chapter structured summaries)';
+      wholeBookSection = `\n\n${modeLabel}:\n===\n${wholeBookContext.slice(0, 180000)}\n${wholeBookContext.length > 180000 ? '\n[...manuscript truncated to fit context]' : ''}\n===`;
+      wholeBookRule =
+        wholeBookMode === 'full'
+          ? '\n- You have the full manuscript above. Cross-reference freely: name drift, timeline gaps, setup/payoff, thematic echoes, tonal consistency. Cite the chapter when pulling from outside the current one.'
+          : '\n- You have continuity notes for every chapter above. Use them to check alignment, flag setup without payoff, and catch contradictions. Admit uncertainty when a note is vague rather than guessing.';
+    }
+
     const systemPrompt = `${persona}
 
-You are embedded in a writing studio, helping the author revise their chapter${chTitle}${pos} from ${g}.${memorySection}
+You are embedded in a writing studio, helping the author revise their chapter${chTitle}${pos} from ${g}.${memorySection}${wholeBookSection}
 
-CHAPTER TEXT:
+CURRENT CHAPTER TEXT:
 ---
 ${plainText.slice(0, 12000)}
 ${plainText.length > 12000 ? '\n[...chapter truncated]' : ''}
 ---
 
 RULES:
-- Keep responses SHORT. 2-4 focused paragraphs max. No filler.
+- Keep responses SHORT. 2-4 focused paragraphs max. No filler.${wholeBookRule}
 - Reference specific lines or passages when giving feedback.
 - When suggesting a rewrite, quote the original then show the revision. Keep rewrites tight.
 - Do NOT use markdown formatting. No asterisks for bold, no hashtags for headers, no bullet lists. Write in natural prose. Use quotation marks to highlight passages.
@@ -103,7 +120,7 @@ RULES:
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
+      max_tokens: wholeBookMode && wholeBookMode !== 'off' ? 1200 : 800,
       system: systemPrompt,
       messages: apiMessages,
     });

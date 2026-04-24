@@ -40,35 +40,10 @@ import type {
 // Sub-components
 // ============================================================================
 
+import InfoTip from './InfoTip';
+
 function InfoPopover({ text, title }: { text: string; title?: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="relative inline-flex items-center">
-      <button
-        type="button"
-        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-        aria-label={title || 'More info'}
-      >
-        <Info size={12} />
-      </button>
-      {open && (
-        <span
-          className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-64 p-2.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] shadow-lg text-[11px] text-[var(--color-text-secondary)] leading-snug text-left normal-case tracking-normal font-normal"
-          role="tooltip"
-        >
-          {title && (
-            <span className="block text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1 font-medium">
-              {title}
-            </span>
-          )}
-          {text}
-        </span>
-      )}
-    </span>
-  );
+  return <InfoTip text={text} title={title} />;
 }
 
 function SectionHeader({

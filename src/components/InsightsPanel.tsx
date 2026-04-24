@@ -25,42 +25,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getWritingRules, setWritingRules } from '@/lib/personalization';
-import { Info, Plus, Shield } from 'lucide-react';
-
-/**
- * Hover/click info tooltip. Pass `text` (short explanation) and optionally
- * `title`. Icon sits inline with section headers.
- */
-function InfoTip({ text, title }: { text: string; title?: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <span className="relative inline-flex items-center">
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-        aria-label={title || 'More info'}
-      >
-        <Info size={12} />
-      </button>
-      {open && (
-        <span
-          className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-64 p-2.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] shadow-lg text-[11px] text-[var(--color-text-secondary)] leading-snug"
-          role="tooltip"
-        >
-          {title && (
-            <span className="block text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1 font-medium">
-              {title}
-            </span>
-          )}
-          {text}
-        </span>
-      )}
-    </span>
-  );
-}
+import { Plus, Shield } from 'lucide-react';
+import InfoTip from './InfoTip';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();

@@ -285,6 +285,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     projectWordCount,
     projectChapters,
     chapterScenes,
+    setHighlightWord,
   } = useStore();
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
@@ -316,9 +317,26 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   }, [activePanel]);
 
   const handleAnnotationClick = useCallback((quote: string) => {
-    // TODO: scroll editor to the matching quote
-    console.log('Navigate to:', quote);
-  }, []);
+    if (!quote) return;
+    // Normalize: strip leading/trailing whitespace and surrounding quote marks
+    // the AI may have added to its own citation.
+    let q = quote.trim().replace(/^[\u2018\u2019\u201C\u201D"']+|[\u2018\u2019\u201C\u201D"']+$/g, '').trim();
+    if (!q) return;
+    // Truncate very long quotes — the search regex will allow flexible
+    // whitespace so the first sentence or so is usually enough to land on
+    // the passage without getting tripped up by minor punctuation drift.
+    if (q.length > 140) {
+      // Prefer ending at a sentence boundary within the first 140 chars.
+      const head = q.slice(0, 140);
+      const lastBreak = Math.max(
+        head.lastIndexOf('. '),
+        head.lastIndexOf('! '),
+        head.lastIndexOf('? ')
+      );
+      q = lastBreak > 40 ? head.slice(0, lastBreak + 1) : head;
+    }
+    setHighlightWord(q);
+  }, [setHighlightWord]);
 
   const handleGoalSave = useCallback((updates: { wordCountGoal: number; goalDeadline?: string; dailyGoal?: number }) => {
     if (currentProject) {

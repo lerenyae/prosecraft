@@ -394,18 +394,28 @@ function AnnotationCard({
     });
   };
 
+  const isClickable = !!annotation.quote && !!onQuoteClick;
   return (
     <div
-      className={`p-2.5 rounded-md border ${severity.bg} ${severity.border} cursor-pointer hover:opacity-90 transition-opacity`}
+      className={`p-2.5 rounded-md border ${severity.bg} ${severity.border} ${isClickable ? 'cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-[var(--color-accent)]/40' : ''} transition-all`}
       onClick={() => onQuoteClick?.(annotation.quote)}
+      title={isClickable ? 'Click to locate this passage in the editor' : undefined}
     >
       <div className="flex items-start gap-2">
         <SeverityIcon size={12} className="mt-0.5 flex-shrink-0 opacity-60" />
         <div className="flex-1 min-w-0">
           {annotation.quote && (
-            <p className="text-[11px] text-[var(--color-text-muted)] italic mb-1 line-clamp-2">
-              &ldquo;{annotation.quote}&rdquo;
-            </p>
+            <div className="flex items-start gap-1 mb-1">
+              <p className="text-[11px] text-[var(--color-text-muted)] italic line-clamp-2 flex-1">
+                &ldquo;{annotation.quote}&rdquo;
+              </p>
+              {isClickable && (
+                <MousePointerClick
+                  size={10}
+                  className="mt-0.5 flex-shrink-0 text-[var(--color-accent)]/70"
+                />
+              )}
+            </div>
           )}
           <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
             {annotation.note}
