@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import AIToolbar from '@/components/AIToolbar';
+import SearchReplace from '@/components/SearchReplace';
 
 // ============================================================================
 // Search Highlight Extension
@@ -379,8 +380,26 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
   // Track selected text locally for AIToolbar
   const [selectedText, setSelectedText] = useState('');
 
+  // Find & Replace panel
+  const [searchReplaceOpen, setSearchReplaceOpen] = useState(false);
+
   // Save status indicator
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'idle'>('idle');
+
+  // Keyboard shortcut: Cmd/Ctrl+F opens Find & Replace
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setSearchReplaceOpen(true);
+      } else if (e.key === 'Escape' && searchReplaceOpen) {
+        setSearchReplaceOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [searchReplaceOpen]);
 
   const editor = useEditor({
     extensions: [
@@ -502,12 +521,19 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
   }, []);
 
   return (
-    <div className={`flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'selection-focus-mode' : ''}`}>
+    <div className={`relative flex flex-col h-full bg-[var(--color-surface)] ${hasActiveSelection ? 'selection-focus-mode' : ''}`}>
       <Toolbar editor={editor} isHidden={focusMode} />
 
       {editor && highlightWord && (
         <SearchBar editor={editor} searchTerm={highlightWord} onClose={() => setHighlightWord(null)} />
       )}
+
+      <SearchReplace
+        editor={editor}
+        isOpen={searchReplaceOpen}
+        onClose={() => setSearchReplaceOpen(false)}
+      />
+
 
       {/* Save status indicator */}
       {saveStatus !== 'idle' && (
