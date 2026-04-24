@@ -14,6 +14,9 @@ import {
   BookOpen,
   PenTool,
   Download,
+  FileText,
+  FileType,
+  Printer,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
@@ -286,6 +289,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
   const [showGoalSettings, setShowGoalSettings] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
@@ -322,41 +326,109 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }, [currentProject, updateProject]);
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (format: 'txt' | 'docx' | 'pdf' = 'txt') => {
     if (!currentProject) return;
 
-    // Build full manuscript text
-    let manuscript = `${currentProject.title}\n\n`;
-    projectChapters.forEach((chapter) => {
-      manuscript += `\n\n${chapter.title}\n\n`;
-      const scenes = chapterScenes(chapter.id);
-      scenes.forEach((scene) => {
-        const text = scene.content
-          .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
-          .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-          .replace(/<br\s*\/?>/gi, '\n')
-          .replace(/<[^>]+>/g, '')
-          .replace(/&nbsp;/g, ' ')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&quot;/g, '"')
-          .replace(/&#039;/g, "'")
-          .replace(/\n{3,}/g, '\n\n');
-        manuscript += text;
-      });
-    });
+    const safeTitle = currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 
-    // Download as .txt
-    const blob = new Blob([manuscript], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const stripHtml = (html: string) =>
+      html
+        .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
+        .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .replace(/\n{3,}/g, '\n\n');
+
+    const triggerDownload = (blob: Blob, filename: string) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    };
+
+    if (format === 'txt') {
+      let manuscript = `${currentProject.title}\n\n`;
+      projectChapters.forEach((chapter) => {
+        manuscript += `\n\n${chapter.title}\n\n`;
+        chapterScenes(chapter.id).forEach((scene) => {
+          manuscript += stripHtml(scene.content);
+        });
+      });
+      triggerDownload(new Blob([manuscript], { type: 'text/plain' }), `${safeTitle}.txt`);
+      return;
+    }
+
+    if (format === 'docx') {
+      const { Document, Packer, Paragraph, HeadingLevel, AlignmentType } = await import('docx');
+      const children: InstanceType<typeof Paragraph>[] = [];
+      children.push(new Paragraph({
+        heading: HeadingLevel.TITLE,
+        alignment: AlignmentType.CENTER,
+        children: [],
+        text: currentProject.title,
+      }));
+      projectChapters.forEach((chapter) => {
+        children.push(new Paragraph({ text: '' }));
+        children.push(new Paragraph({
+          heading: HeadingLevel.HEADING_1,
+          alignment: AlignmentType.CENTER,
+          text: chapter.title,
+        }));
+        chapterScenes(chapter.id).forEach((scene) => {
+          const text = stripHtml(scene.content).trim();
+          text.split(/\n\n+/).forEach((para) => {
+            if (para.trim()) {
+              children.push(new Paragraph({ text: para.replace(/\n/g, ' ').trim() }));
+            }
+          });
+        });
+      });
+      const doc = new Document({ sections: [{ properties: {}, children }] });
+      const blob = await Packer.toBlob(doc);
+      triggerDownload(blob, `${safeTitle}.docx`);
+      return;
+    }
+
+    if (format === 'pdf') {
+      // Print-to-PDF via a styled print window (zero new deps).
+      const win = window.open('', '_blank', 'width=800,height=1000');
+      if (!win) return;
+      const escape = (s: string) =>
+        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      let body = `<h1 style="text-align:center">${escape(currentProject.title)}</h1>`;
+      projectChapters.forEach((chapter) => {
+        body += `<h2 style="text-align:center;page-break-before:always;margin-top:3rem">${escape(chapter.title)}</h2>`;
+        chapterScenes(chapter.id).forEach((scene) => {
+          const text = stripHtml(scene.content).trim();
+          text.split(/\n\n+/).forEach((para) => {
+            if (para.trim()) {
+              body += `<p style="text-indent:2em;margin:0 0 .2em 0">${escape(para.replace(/\n/g, ' ').trim())}</p>`;
+            }
+          });
+        });
+      });
+      win.document.write(`<!doctype html><html><head><title>${escape(currentProject.title)}</title><style>
+        body{font-family:Georgia,serif;max-width:6.5in;margin:1in auto;line-height:1.6;color:#000}
+        h1{font-size:24pt;margin-bottom:2rem}
+        h2{font-size:18pt;margin-bottom:1rem}
+        p{font-size:12pt}
+        @media print{ body{margin:0} }
+      </style></head><body>${body}</body></html>`);
+      win.document.close();
+      win.focus();
+      setTimeout(() => { win.print(); }, 250);
+      return;
+    }
   }, [currentProject, projectChapters, chapterScenes]);
 
   if (!currentProject) {
@@ -444,14 +516,47 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </span>
               </button>
 
-              {/* Export */}
-              <button
-                onClick={handleExport}
-                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
-                title="Export manuscript"
-              >
-                <Download className="w-4 h-4" />
-              </button>
+              {/* Export with format picker */}
+              <div className="relative">
+                <button
+                  onClick={() => setExportMenuOpen(o => !o)}
+                  className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
+                  title="Export manuscript"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                {exportMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setExportMenuOpen(false)}
+                    />
+                    <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-lg py-1">
+                      <button
+                        onClick={() => { setExportMenuOpen(false); handleExport('docx'); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
+                      >
+                        <FileType className="w-3.5 h-3.5 text-[var(--color-accent)]" />
+                        Word (.docx)
+                      </button>
+                      <button
+                        onClick={() => { setExportMenuOpen(false); handleExport('pdf'); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-[var(--color-accent)]" />
+                        PDF (print)
+                      </button>
+                      <button
+                        onClick={() => { setExportMenuOpen(false); handleExport('txt'); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[var(--color-accent)]" />
+                        Plain text (.txt)
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
 
               {/* Goal Settings */}
               <button
