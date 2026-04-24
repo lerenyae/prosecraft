@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { MODELS } from '@/lib/ai-models';
 
 interface GenerateRequest {
   action: 'generate';
@@ -85,7 +86,7 @@ Rules:
 - Keep each field concise: 1-4 sentences max.${roleHint}${namesNote}`;
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: MODELS.DEEP,
         max_tokens: 1200,
         system: systemPrompt,
         messages: [{ role: 'user', content: prompt }],
@@ -154,7 +155,7 @@ Rules:
 - Return ONLY valid JSON with the empty field keys.`;
 
       const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: MODELS.DEEP,
         max_tokens: 1000,
         system: systemPrompt,
         messages: [{ role: 'user', content: 'Fill in the empty fields for this character.' }],

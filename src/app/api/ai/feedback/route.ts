@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { MODELS } from '@/lib/ai-models';
 
 interface FeedbackRequest {
   chapterTitle: string;
@@ -147,7 +148,7 @@ export async function POST(request: NextRequest) {
     const userPrompt = buildUserPrompt(chapterTitle, plainTextContent, priorChaptersSummary);
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: MODELS.DEEP,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [

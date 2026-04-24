@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { MODELS } from '@/lib/ai-models';
 
 interface AnalyzeRequest {
   mode: 'chapter' | 'selection';
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: MODELS.DEEP,
       max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
