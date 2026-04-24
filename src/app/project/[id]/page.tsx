@@ -358,8 +358,15 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         .replace(/<del[^>]*data-track[^>]*>[\s\S]*?<\/del>/gi, '')
         .replace(/<ins[^>]*data-track[^>]*>([\s\S]*?)<\/ins>/gi, '$1');
 
+    // Sentinel for inline scene breaks (TipTap HorizontalRule nodes). We
+    // replace <hr> tags with this marker BEFORE the generic tag strip so the
+    // break survives as its own paragraph and each export path can render it
+    // as a centered block.
+    const SCENE_BREAK_MARKER = '\u0001SCENEBREAK\u0001';
+
     const stripHtml = (html: string) =>
       normalizeTrackChanges(html)
+        .replace(/<hr\b[^>]*>/gi, `\n\n${SCENE_BREAK_MARKER}\n\n`)
         .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
         .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
         .replace(/<br\s*\/?>/gi, '\n')
@@ -400,6 +407,12 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
     try {
       if (options.format === 'txt') {
+        // Replace inline scene-break sentinels with the configured glyph on
+        // its own line so TXT output carries the break the author saw.
+        const txtSceneBreak = sceneBreakGlyph ? `\n${sceneBreakGlyph}\n` : '\n';
+        const toTxt = (content: string) =>
+          stripHtml(content).replace(new RegExp(SCENE_BREAK_MARKER, 'g'), txtSceneBreak);
+
         let manuscript = `${currentProject.title}\n\n`;
         projectChapters.forEach((chapter, idx) => {
           manuscript += `\n\n${formatChapterHeading(chapter.title, idx)}\n\n`;
@@ -407,7 +420,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             if (sIdx > 0 && sceneBreakGlyph) {
               manuscript += `\n${sceneBreakGlyph}\n\n`;
             }
-            manuscript += stripHtml(scene.content);
+            manuscript += toTxt(scene.content);
           });
         });
         triggerDownload(new Blob([manuscript], { type: 'text/plain' }), `${safeTitle}.txt`);
@@ -494,6 +507,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             text.split(/\n\n+/).forEach((para) => {
               const clean = para.replace(/\n/g, ' ').trim();
               if (!clean) return;
+              // Inline scene break from the editor (TipTap HorizontalRule)
+              if (clean === SCENE_BREAK_MARKER) {
+                if (sceneBreakGlyph) {
+                  children.push(sceneBreakParagraph());
+                } else {
+                  children.push(blankLine());
+                }
+                firstParaOfChapter = true;
+                return;
+              }
               if (firstParaOfChapter) {
                 children.push(new Paragraph({
                   alignment: AlignmentType.LEFT,
@@ -584,9 +607,18 @@ export default function ProjectPage({ params }: ProjectPageProps) {
             }
             const text = stripHtml(scene.content).trim();
             text.split(/\n\n+/).forEach((para) => {
-              if (para.trim()) {
-                body += `<p style="${indentRule}margin:0 0 .2em 0">${escape(para.replace(/\n/g, ' ').trim())}</p>`;
+              const clean = para.replace(/\n/g, ' ').trim();
+              if (!clean) return;
+              // Inline scene break from the editor (TipTap HorizontalRule)
+              if (clean === SCENE_BREAK_MARKER) {
+                if (sceneBreakGlyph) {
+                  body += `<p style="text-align:center;margin:1.5em 0">${escape(sceneBreakGlyph)}</p>`;
+                } else {
+                  body += `<p style="margin:1.5em 0">&nbsp;</p>`;
+                }
+                return;
               }
+              body += `<p style="${indentRule}margin:0 0 .2em 0">${escape(clean)}</p>`;
             });
           });
         });
