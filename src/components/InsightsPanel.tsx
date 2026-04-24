@@ -125,6 +125,23 @@ export default function InsightsPanel() {
   const [filterLoading, setFilterLoading] = useState(false);
   const [filterExpanded, setFilterExpanded] = useState<string | null>(null);
 
+  // Style profile state
+  const [styleProfile, setStyleProfile] = useState<any | null>(null);
+  const [styleLoading, setStyleLoading] = useState(false);
+  const [styleExpanded, setStyleExpanded] = useState(true);
+
+  // Load saved style profile for current project
+  useEffect(() => {
+    if (!currentProject) return;
+    try {
+      const raw = localStorage.getItem(`prosecraft-style-${currentProject.id}`);
+      if (raw) setStyleProfile(JSON.parse(raw));
+      else setStyleProfile(null);
+    } catch {
+      setStyleProfile(null);
+    }
+  }, [currentProject]);
+
   // Track session start word count
   useEffect(() => {
     if (sessionStartWords === null && projectWordCount > 0) {
@@ -213,6 +230,35 @@ export default function InsightsPanel() {
       setScanLoading(false);
     }
   }, [currentProject, currentChapter, projectChapters, chapterScenes]);
+
+  // Style profile generator â full-manuscript sample to Opus
+  const runStyleProfile = useCallback(async () => {
+    if (!currentProject || !allText || allText.length < 200) return;
+    setStyleLoading(true);
+    try {
+      const res = await fetch('/api/ai/style-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sample: allText, genre: currentProject.genre }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStyleProfile(data.profile);
+        try {
+          localStorage.setItem(
+            `prosecraft-style-${currentProject.id}`,
+            JSON.stringify(data.profile)
+          );
+        } catch {
+          /* quota */
+        }
+      }
+    } catch {
+      // silent fail
+    } finally {
+      setStyleLoading(false);
+    }
+  }, [currentProject, allText]);
 
   // Chapter-scoped text for per-chapter analysis
   const chapterText = useMemo(() => {
@@ -402,6 +448,169 @@ export default function InsightsPanel() {
                     </p>
                   ))}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Style Profile */}
+      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-[var(--color-accent)]" />
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Style Profile</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {styleProfile && (
+              <button
+                onClick={() => setStyleExpanded(!styleExpanded)}
+                className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+              >
+                {styleExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </button>
+            )}
+            <button
+              onClick={runStyleProfile}
+              disabled={styleLoading || !allText || allText.length < 200}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                styleLoading || !allText || allText.length < 200
+                  ? 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] cursor-not-allowed'
+                  : 'bg-[var(--color-accent)] text-[var(--color-bg-primary)] hover:bg-[var(--color-accent-dark)]'
+              }`}
+            >
+              {styleLoading ? (
+                <span className="flex items-center gap-1">
+                  <Loader2 size={10} className="animate-spin" />
+                  Profiling...
+                </span>
+              ) : styleProfile ? 'Regenerate' : 'Analyze'}
+            </button>
+          </div>
+        </div>
+
+        {!styleProfile && !styleLoading && (
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
+            {!allText || allText.length < 200
+              ? 'Write at least 200 characters to unlock style analysis.'
+              : 'Generate a fingerprint of your voice â tone, rhythm, go-to words, tics, and influences. Helps the AI match your style.'}
+          </p>
+        )}
+
+        {styleProfile && styleExpanded && (
+          <div className="mt-3 space-y-3 text-[11px]">
+            {/* Summary */}
+            {styleProfile.summary && (
+              <div className="p-2.5 rounded-md bg-[var(--color-accent)]/10 border border-[var(--color-accent)]/20">
+                <p className="text-[var(--color-text-primary)] leading-relaxed italic">
+                  &ldquo;{styleProfile.summary}&rdquo;
+                </p>
+              </div>
+            )}
+
+            {/* Voice */}
+            {styleProfile.voice && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Voice</p>
+                <p className="text-[var(--color-text-secondary)] leading-relaxed">
+                  <span className="font-medium text-[var(--color-text-primary)]">{styleProfile.voice.tone}</span>
+                  {styleProfile.voice.formality && ` Â· ${styleProfile.voice.formality}`}
+                </p>
+                {styleProfile.voice.personality && (
+                  <p className="text-[var(--color-text-secondary)] leading-relaxed mt-1">
+                    {styleProfile.voice.personality}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Sentences */}
+            {styleProfile.sentences && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Sentences</p>
+                <p className="text-[var(--color-text-secondary)] leading-relaxed">
+                  Length: <span className="font-medium">{styleProfile.sentences.averageLength}</span>
+                </p>
+                {styleProfile.sentences.rhythm && (
+                  <p className="text-[var(--color-text-secondary)] leading-relaxed mt-0.5">
+                    {styleProfile.sentences.rhythm}
+                  </p>
+                )}
+                {styleProfile.sentences.favoredStructures?.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {styleProfile.sentences.favoredStructures.map((s: string, i: number) => (
+                      <li key={i} className="text-[var(--color-text-secondary)] before:content-['Â·'] before:mr-1.5 before:text-[var(--color-accent)]">
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            {/* Go-to words */}
+            {styleProfile.diction?.goToWords?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Go-To Words</p>
+                <div className="flex flex-wrap gap-1">
+                  {styleProfile.diction.goToWords.map((w: string, i: number) => (
+                    <span key={i} className="px-2 py-0.5 rounded-md bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] text-[10px]">
+                      {w}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Unique phrases */}
+            {styleProfile.diction?.uniquePhrases?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Fresh Turns of Phrase</p>
+                <ul className="space-y-0.5">
+                  {styleProfile.diction.uniquePhrases.map((p: string, i: number) => (
+                    <li key={i} className="text-[var(--color-text-secondary)] italic">&ldquo;{p}&rdquo;</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Strengths */}
+            {styleProfile.techniques?.strengths?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Strengths</p>
+                <ul className="space-y-0.5">
+                  {styleProfile.techniques.strengths.map((s: string, i: number) => (
+                    <li key={i} className="text-[var(--color-text-secondary)] flex gap-1.5">
+                      <CheckCircle2 size={11} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Tics */}
+            {styleProfile.techniques?.tics?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Watch For</p>
+                <ul className="space-y-0.5">
+                  {styleProfile.techniques.tics.map((t: string, i: number) => (
+                    <li key={i} className="text-[var(--color-text-secondary)] flex gap-1.5">
+                      <AlertTriangle size={11} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                      <span>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Influences */}
+            {styleProfile.influences?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1">Reminds Me Of</p>
+                <p className="text-[var(--color-text-secondary)]">
+                  {styleProfile.influences.join(' Â· ')}
+                </p>
               </div>
             )}
           </div>
