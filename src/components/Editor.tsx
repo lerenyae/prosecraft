@@ -530,10 +530,10 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
         ) : (
           <div className="mx-auto max-w-[680px] px-4 py-12 sm:px-6 lg:px-8 relative">
             <EditorContent editor={editor} />
-            <AIToolbar editor={editor} selectedText={selectedText} />
           </div>
         )}
       </div>
+      <AIToolbar editor={editor} selectedText={selectedText} />
     </div>
   );
 }
