@@ -24,6 +24,7 @@ function getProjectWordCount(projectId: string): number {
   }
 }
 import ThemeToggle from '@/components/ThemeToggle';
+import OnboardingModal from '@/components/OnboardingModal';
 
 const GENRE_OPTIONS = [
   'Mystery/Thriller',
@@ -365,6 +366,9 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Onboarding Modal (fires once for new users) */}
+      <OnboardingModal />
 
       {/* New Project Modal */}
       {showModal && (
