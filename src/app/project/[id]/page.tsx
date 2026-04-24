@@ -14,9 +14,6 @@ import {
   BookOpen,
   PenTool,
   Download,
-  FileText,
-  FileType,
-  Printer,
 } from 'lucide-react';
 import Editor from '@/components/Editor';
 import Sidebar from '@/components/Sidebar';
@@ -25,6 +22,7 @@ import InsightsPanel from '@/components/InsightsPanel';
 import BetaReaderPanel from '@/components/BetaReaderPanel';
 import ChatPanel from '@/components/ChatPanel';
 import StoryIntelPanel from '@/components/StoryIntelPanel';
+import ExportModal, { ExportOptions } from '@/components/ExportModal';
 
 // ============================================================================
 // Types
@@ -290,7 +288,8 @@ export default function ProjectPage({ params }: ProjectPageProps) {
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
   const [showGoalSettings, setShowGoalSettings] = useState(false);
-  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     setCurrentProject(resolvedParams.id);
@@ -344,13 +343,23 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     }
   }, [currentProject, updateProject]);
 
-  const handleExport = useCallback(async (format: 'txt' | 'docx' | 'pdf' = 'txt') => {
+  const handleExport = useCallback(async (options: ExportOptions) => {
     if (!currentProject) return;
+    setIsExporting(true);
 
     const safeTitle = currentProject.title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
 
-    const stripHtml = (html: string) =>
+    // Strip any pending track-changes content before export so the published
+    // manuscript reflects the author's current-as-written state:
+    //   trackDeletion    → drop entirely (it's flagged for removal)
+    //   trackInsertion   → keep the text, drop the mark wrapper
+    const normalizeTrackChanges = (html: string) =>
       html
+        .replace(/<del[^>]*data-track[^>]*>[\s\S]*?<\/del>/gi, '')
+        .replace(/<ins[^>]*data-track[^>]*>([\s\S]*?)<\/ins>/gi, '$1');
+
+    const stripHtml = (html: string) =>
+      normalizeTrackChanges(html)
         .replace(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi, '\n$1\n\n')
         .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
         .replace(/<br\s*\/?>/gi, '\n')
@@ -363,6 +372,21 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         .replace(/&#039;/g, "'")
         .replace(/\n{3,}/g, '\n\n');
 
+    // Format the chapter heading text according to options
+    const formatChapterHeading = (raw: string, index: number): string => {
+      const base = raw || `Chapter ${index + 1}`;
+      if (options.chapterHeadingStyle === 'upper') return base.toUpperCase();
+      if (options.chapterHeadingStyle === 'numbered') return `Chapter ${index + 1}`;
+      // title case — keep as author wrote it
+      return base;
+    };
+
+    const sceneBreakGlyph = options.sceneBreakStyle === 'hash'
+      ? '#'
+      : options.sceneBreakStyle === 'blank'
+        ? ''
+        : '* * *';
+
     const triggerDownload = (blob: Blob, filename: string) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -374,155 +398,223 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       URL.revokeObjectURL(url);
     };
 
-    if (format === 'txt') {
-      let manuscript = `${currentProject.title}\n\n`;
-      projectChapters.forEach((chapter) => {
-        manuscript += `\n\n${chapter.title}\n\n`;
-        chapterScenes(chapter.id).forEach((scene) => {
-          manuscript += stripHtml(scene.content);
-        });
-      });
-      triggerDownload(new Blob([manuscript], { type: 'text/plain' }), `${safeTitle}.txt`);
-      return;
-    }
-
-    if (format === 'docx') {
-      const { Document, Packer, Paragraph, TextRun, AlignmentType, PageBreak, Footer, PageNumber } = await import('docx');
-
-      // Novel manuscript format:
-      //   Times New Roman 12pt (size 24 in half-points)
-      //   Double-spaced (line 480 in twentieths of a point)
-      //   1-inch margins (1440 twips)
-      //   First-line indent 0.5" (720 twips) on body paragraphs
-      //   No space between paragraphs
-      //   Chapter headings centered on new page, ALL CAPS
-      //   Page number in footer
-      const FONT = 'Times New Roman';
-      const BODY_SIZE = 24; // 12pt
-      const TITLE_SIZE = 36; // 18pt
-      const CHAPTER_SIZE = 28; // 14pt
-      const LINE_DOUBLE = 480;
-      const INDENT_FIRST = 720; // 0.5"
-
-      const bodyRun = (text: string) =>
-        new TextRun({ text, font: FONT, size: BODY_SIZE });
-
-      const bodyParagraph = (text: string) =>
-        new Paragraph({
-          alignment: AlignmentType.LEFT,
-          indent: { firstLine: INDENT_FIRST },
-          spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
-          children: [bodyRun(text)],
-        });
-
-      const blankLine = () =>
-        new Paragraph({
-          spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
-          children: [new TextRun({ text: '', font: FONT, size: BODY_SIZE })],
-        });
-
-      const children: InstanceType<typeof Paragraph>[] = [];
-
-      // Title page — centered in vertical space via several blank lines
-      for (let i = 0; i < 10; i++) children.push(blankLine());
-      children.push(new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
-        children: [new TextRun({ text: currentProject.title, font: FONT, size: TITLE_SIZE, bold: true })],
-      }));
-
-      projectChapters.forEach((chapter, idx) => {
-        // Chapter on new page
-        const chapterHeading = new Paragraph({
-          alignment: AlignmentType.CENTER,
-          spacing: { line: LINE_DOUBLE, before: 0, after: 480 },
-          children: [
-            new PageBreak(),
-            new TextRun({ text: (chapter.title || `Chapter ${idx + 1}`).toUpperCase(), font: FONT, size: CHAPTER_SIZE, bold: true }),
-          ],
-        });
-        children.push(chapterHeading);
-
-        let firstParaOfChapter = true;
-        chapterScenes(chapter.id).forEach((scene) => {
-          const text = stripHtml(scene.content).trim();
-          text.split(/\n\n+/).forEach((para) => {
-            const clean = para.replace(/\n/g, ' ').trim();
-            if (!clean) return;
-            if (firstParaOfChapter) {
-              // First paragraph after chapter heading — no indent (book convention)
-              children.push(new Paragraph({
-                alignment: AlignmentType.LEFT,
-                spacing: { line: LINE_DOUBLE, before: 0, after: 0 },
-                children: [bodyRun(clean)],
-              }));
-              firstParaOfChapter = false;
-            } else {
-              children.push(bodyParagraph(clean));
+    try {
+      if (options.format === 'txt') {
+        let manuscript = `${currentProject.title}\n\n`;
+        projectChapters.forEach((chapter, idx) => {
+          manuscript += `\n\n${formatChapterHeading(chapter.title, idx)}\n\n`;
+          chapterScenes(chapter.id).forEach((scene, sIdx) => {
+            if (sIdx > 0 && sceneBreakGlyph) {
+              manuscript += `\n${sceneBreakGlyph}\n\n`;
             }
+            manuscript += stripHtml(scene.content);
           });
         });
-      });
+        triggerDownload(new Blob([manuscript], { type: 'text/plain' }), `${safeTitle}.txt`);
+        return;
+      }
 
-      const doc = new Document({
-        creator: 'ProseCraft',
-        title: currentProject.title,
-        styles: {
-          default: {
-            document: { run: { font: FONT, size: BODY_SIZE } },
-          },
-        },
-        sections: [{
-          properties: {
-            page: {
-              margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 }, // 1" all around
+      if (options.format === 'docx') {
+        const { Document, Packer, Paragraph, TextRun, AlignmentType, PageBreak, Footer, Header, PageNumber } = await import('docx');
+
+        // Convert user-friendly options into OOXML units
+        const FONT = options.font;
+        const BODY_SIZE = options.fontSize * 2;                // pt → half-points
+        const TITLE_SIZE = (options.fontSize + 6) * 2;         // ~18pt when body=12
+        const CHAPTER_SIZE = (options.fontSize + 2) * 2;       // ~14pt when body=12
+        const LINE_SPACING =
+          options.lineSpacing === 'double' ? 480 :
+          options.lineSpacing === '1.5'    ? 360 : 240;        // twentieths of a point
+        const INDENT_FIRST = options.firstLineIndent ? 720 : 0; // 0.5" = 720 twips
+        const MARGIN = Math.round(options.marginInches * 1440); // 1" = 1440 twips
+
+        const bodyRun = (text: string) =>
+          new TextRun({ text, font: FONT, size: BODY_SIZE });
+
+        const bodyParagraph = (text: string) =>
+          new Paragraph({
+            alignment: AlignmentType.LEFT,
+            indent: INDENT_FIRST ? { firstLine: INDENT_FIRST } : undefined,
+            spacing: { line: LINE_SPACING, before: 0, after: 0 },
+            children: [bodyRun(text)],
+          });
+
+        const blankLine = () =>
+          new Paragraph({
+            spacing: { line: LINE_SPACING, before: 0, after: 0 },
+            children: [new TextRun({ text: '', font: FONT, size: BODY_SIZE })],
+          });
+
+        const sceneBreakParagraph = () =>
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { line: LINE_SPACING, before: 240, after: 240 },
+            children: [new TextRun({ text: sceneBreakGlyph, font: FONT, size: BODY_SIZE })],
+          });
+
+        const children: InstanceType<typeof Paragraph>[] = [];
+
+        // Optional title page — centered in vertical space
+        if (options.includeTitlePage) {
+          for (let i = 0; i < 10; i++) children.push(blankLine());
+          children.push(new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { line: LINE_SPACING, before: 0, after: 0 },
+            children: [new TextRun({ text: currentProject.title, font: FONT, size: TITLE_SIZE, bold: true })],
+          }));
+        }
+
+        projectChapters.forEach((chapter, idx) => {
+          const chapterHeading = new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { line: LINE_SPACING, before: 0, after: 480 },
+            children: [
+              ...(options.includeTitlePage || idx > 0 ? [new PageBreak()] : []),
+              new TextRun({
+                text: formatChapterHeading(chapter.title, idx),
+                font: FONT,
+                size: CHAPTER_SIZE,
+                bold: true,
+              }),
+            ],
+          });
+          children.push(chapterHeading);
+
+          let firstParaOfChapter = true;
+          const scenes = chapterScenes(chapter.id);
+          scenes.forEach((scene, sIdx) => {
+            if (sIdx > 0 && sceneBreakGlyph) {
+              children.push(sceneBreakParagraph());
+              firstParaOfChapter = true;
+            } else if (sIdx > 0 && !sceneBreakGlyph) {
+              children.push(blankLine());
+            }
+
+            const text = stripHtml(scene.content).trim();
+            text.split(/\n\n+/).forEach((para) => {
+              const clean = para.replace(/\n/g, ' ').trim();
+              if (!clean) return;
+              if (firstParaOfChapter) {
+                children.push(new Paragraph({
+                  alignment: AlignmentType.LEFT,
+                  spacing: { line: LINE_SPACING, before: 0, after: 0 },
+                  children: [bodyRun(clean)],
+                }));
+                firstParaOfChapter = false;
+              } else {
+                children.push(bodyParagraph(clean));
+              }
+            });
+          });
+        });
+
+        const footerChildren = options.includePageNumbers
+          ? {
+              default: new Footer({
+                children: [new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: BODY_SIZE })],
+                })],
+              }),
+            }
+          : undefined;
+
+        const headerChildren = options.headerText
+          ? {
+              default: new Header({
+                children: [new Paragraph({
+                  alignment: AlignmentType.CENTER,
+                  children: [new TextRun({ text: options.headerText, font: FONT, size: BODY_SIZE - 2 })],
+                })],
+              }),
+            }
+          : undefined;
+
+        const doc = new Document({
+          creator: 'ProseCraft',
+          title: currentProject.title,
+          styles: {
+            default: {
+              document: { run: { font: FONT, size: BODY_SIZE } },
             },
           },
-          footers: {
-            default: new Footer({
-              children: [new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [new TextRun({ children: [PageNumber.CURRENT], font: FONT, size: BODY_SIZE })],
-              })],
-            }),
-          },
-          children,
-        }],
-      });
-      const blob = await Packer.toBlob(doc);
-      triggerDownload(blob, `${safeTitle}.docx`);
-      return;
-    }
+          sections: [{
+            properties: {
+              page: {
+                margin: { top: MARGIN, right: MARGIN, bottom: MARGIN, left: MARGIN },
+              },
+            },
+            ...(footerChildren ? { footers: footerChildren } : {}),
+            ...(headerChildren ? { headers: headerChildren } : {}),
+            children,
+          }],
+        });
+        const blob = await Packer.toBlob(doc);
+        triggerDownload(blob, `${safeTitle}.docx`);
+        return;
+      }
 
-    if (format === 'pdf') {
-      // Print-to-PDF via a styled print window (zero new deps).
-      const win = window.open('', '_blank', 'width=800,height=1000');
-      if (!win) return;
-      const escape = (s: string) =>
-        s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      let body = `<h1 style="text-align:center">${escape(currentProject.title)}</h1>`;
-      projectChapters.forEach((chapter) => {
-        body += `<h2 style="text-align:center;page-break-before:always;margin-top:3rem">${escape(chapter.title)}</h2>`;
-        chapterScenes(chapter.id).forEach((scene) => {
-          const text = stripHtml(scene.content).trim();
-          text.split(/\n\n+/).forEach((para) => {
-            if (para.trim()) {
-              body += `<p style="text-indent:2em;margin:0 0 .2em 0">${escape(para.replace(/\n/g, ' ').trim())}</p>`;
+      if (options.format === 'pdf') {
+        // Print-to-PDF via a styled print window (zero new deps).
+        const win = window.open('', '_blank', 'width=800,height=1000');
+        if (!win) return;
+        const escape = (s: string) =>
+          s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+        const indentRule = options.firstLineIndent ? 'text-indent:2em;' : '';
+        const lineHeight =
+          options.lineSpacing === 'double' ? 2 :
+          options.lineSpacing === '1.5'    ? 1.5 : 1.15;
+
+        let body = '';
+        if (options.includeTitlePage) {
+          body += `<div style="page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:9in">
+            <h1 style="font-size:${options.fontSize + 12}pt;margin:0">${escape(currentProject.title)}</h1>
+          </div>`;
+        }
+
+        projectChapters.forEach((chapter, idx) => {
+          body += `<h2 style="text-align:center;page-break-before:always;margin-top:3rem;font-size:${options.fontSize + 4}pt">${escape(formatChapterHeading(chapter.title, idx))}</h2>`;
+          const scenes = chapterScenes(chapter.id);
+          scenes.forEach((scene, sIdx) => {
+            if (sIdx > 0 && sceneBreakGlyph) {
+              body += `<p style="text-align:center;margin:1.5em 0">${escape(sceneBreakGlyph)}</p>`;
+            } else if (sIdx > 0) {
+              body += `<p style="margin:1.5em 0">&nbsp;</p>`;
             }
+            const text = stripHtml(scene.content).trim();
+            text.split(/\n\n+/).forEach((para) => {
+              if (para.trim()) {
+                body += `<p style="${indentRule}margin:0 0 .2em 0">${escape(para.replace(/\n/g, ' ').trim())}</p>`;
+              }
+            });
           });
         });
-      });
-      win.document.write(`<!doctype html><html><head><title>${escape(currentProject.title)}</title><style>
-        body{font-family:Georgia,serif;max-width:6.5in;margin:1in auto;line-height:1.6;color:#000}
-        h1{font-size:24pt;margin-bottom:2rem}
-        h2{font-size:18pt;margin-bottom:1rem}
-        p{font-size:12pt}
-        @media print{ body{margin:0} }
-      </style></head><body>${body}</body></html>`);
-      win.document.close();
-      win.focus();
-      setTimeout(() => { win.print(); }, 250);
-      return;
+
+        const headerHTML = options.headerText
+          ? `<div class="running-header">${escape(options.headerText)}</div>`
+          : '';
+        const pageNumberCSS = options.includePageNumbers
+          ? `@page { @bottom-center { content: counter(page); font-family: ${options.font}, serif; font-size: ${options.fontSize}pt; } }`
+          : '';
+
+        win.document.write(`<!doctype html><html><head><title>${escape(currentProject.title)}</title><style>
+          ${pageNumberCSS}
+          body{font-family:"${options.font}",Georgia,serif;max-width:${8.5 - options.marginInches * 2}in;margin:${options.marginInches}in auto;line-height:${lineHeight};color:#000;font-size:${options.fontSize}pt}
+          h1{font-size:${options.fontSize + 12}pt;margin-bottom:2rem}
+          h2{font-size:${options.fontSize + 4}pt;margin-bottom:1rem}
+          p{font-size:${options.fontSize}pt}
+          .running-header{position:running(header);text-align:center;font-size:${options.fontSize - 1}pt;color:#555}
+          @media print{ body{margin:0 ${options.marginInches}in} }
+        </style></head><body>${headerHTML}${body}</body></html>`);
+        win.document.close();
+        win.focus();
+        setTimeout(() => { win.print(); }, 250);
+        return;
+      }
+    } finally {
+      setIsExporting(false);
+      setExportModalOpen(false);
     }
   }, [currentProject, projectChapters, chapterScenes]);
 
@@ -554,6 +646,16 @@ export default function ProjectPage({ params }: ProjectPageProps) {
         project={currentProject as any}
         onSave={handleGoalSave}
         projectWordCount={projectWordCount}
+      />
+
+      {/* Export Customization Modal */}
+      <ExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        onExport={handleExport}
+        projectId={currentProject.id}
+        projectTitle={currentProject.title}
+        isExporting={isExporting}
       />
 
       {/* Top Bar */}
@@ -611,47 +713,14 @@ export default function ProjectPage({ params }: ProjectPageProps) {
                 </span>
               </button>
 
-              {/* Export with format picker */}
-              <div className="relative">
-                <button
-                  onClick={() => setExportMenuOpen(o => !o)}
-                  className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
-                  title="Export manuscript"
-                >
-                  <Download className="w-4 h-4" />
-                </button>
-                {exportMenuOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setExportMenuOpen(false)}
-                    />
-                    <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] bg-[var(--color-bg-primary)] border border-[var(--color-border)] rounded-lg shadow-lg py-1">
-                      <button
-                        onClick={() => { setExportMenuOpen(false); handleExport('docx'); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
-                      >
-                        <FileType className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                        Word (.docx)
-                      </button>
-                      <button
-                        onClick={() => { setExportMenuOpen(false); handleExport('pdf'); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
-                      >
-                        <Printer className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                        PDF (print)
-                      </button>
-                      <button
-                        onClick={() => { setExportMenuOpen(false); handleExport('txt'); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
-                      >
-                        <FileText className="w-3.5 h-3.5 text-[var(--color-accent)]" />
-                        Plain text (.txt)
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+              {/* Export — opens customization modal */}
+              <button
+                onClick={() => setExportModalOpen(true)}
+                className="p-2 rounded-lg transition-colors hover:bg-[var(--color-surface-alt)]"
+                title="Export manuscript"
+              >
+                <Download className="w-4 h-4" />
+              </button>
 
               {/* Goal Settings */}
               <button

@@ -34,10 +34,18 @@ import {
   X,
   ChevronUp,
   ChevronDown,
+  GitPullRequest,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import AIToolbar from '@/components/AIToolbar';
 import SearchReplace from '@/components/SearchReplace';
+import PendingChangesBar from '@/components/PendingChangesBar';
+import {
+  TrackInsertion,
+  TrackDeletion,
+  loadTrackChangesEnabled,
+  saveTrackChangesEnabled,
+} from '@/lib/track-changes';
 
 // ============================================================================
 // Search Highlight Extension
@@ -262,6 +270,19 @@ interface ToolbarProps {
 
 function Toolbar({ editor, isHidden = false }: ToolbarProps) {
   const [showBreakMenu, setShowBreakMenu] = useState(false);
+  const [trackChanges, setTrackChanges] = useState(false);
+
+  useEffect(() => {
+    setTrackChanges(loadTrackChangesEnabled());
+  }, []);
+
+  const toggleTrackChanges = useCallback(() => {
+    setTrackChanges((prev) => {
+      const next = !prev;
+      saveTrackChangesEnabled(next);
+      return next;
+    });
+  }, []);
 
   if (!editor || isHidden) return null;
 
@@ -389,6 +410,24 @@ function Toolbar({ editor, isHidden = false }: ToolbarProps) {
       >
         <Redo2 size={16} />
       </button>
+
+      <div className={divider} />
+
+      <button
+        onClick={toggleTrackChanges}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+          trackChanges
+            ? 'bg-[var(--color-accent)] text-[var(--color-accent-on)]'
+            : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-alt)]'
+        }`}
+        title={trackChanges
+          ? 'Track changes ON — AI edits arrive as pending diffs you can accept or reject'
+          : 'Track changes OFF — AI edits replace selected text immediately'}
+        type="button"
+      >
+        <GitPullRequest size={14} />
+        <span className="font-medium">Track</span>
+      </button>
     </div>
   );
 }
@@ -465,6 +504,8 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
         types: ['heading', 'paragraph'],
       }),
       SearchHighlight,
+      TrackInsertion,
+      TrackDeletion,
       HorizontalRule.extend({
         addAttributes() {
           return {
@@ -567,6 +608,8 @@ export function Editor({ onSelectionChange, hasActiveSelection }: EditorProps) {
       {editor && highlightWord && (
         <SearchBar editor={editor} searchTerm={highlightWord} onClose={() => setHighlightWord(null)} />
       )}
+
+      <PendingChangesBar editor={editor} />
 
       <SearchReplace
         editor={editor}

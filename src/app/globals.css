@@ -234,3 +234,29 @@ body {
   background-color: rgba(251, 191, 36, 0.7);
   box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.5);
 }
+
+/* Track Changes — inline diff marks */
+.track-insert {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: rgb(6, 95, 70);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.5);
+  padding: 1px 0;
+}
+.track-delete {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: rgb(153, 27, 27);
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.7);
+  padding: 1px 0;
+}
+.dark .track-insert {
+  background-color: rgba(16, 185, 129, 0.22);
+  color: rgb(110, 231, 183);
+  border-bottom-color: rgba(16, 185, 129, 0.7);
+}
+.dark .track-delete {
+  background-color: rgba(239, 68, 68, 0.18);
+  color: rgb(252, 165, 165);
+  text-decoration-color: rgba(239, 68, 68, 0.9);
+}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getWriterProfile, getStyleProfile, getWritingRules } from '@/lib/personalization';
+import { proposeReplacement, loadTrackChangesEnabled } from '@/lib/track-changes';
 
 // ============================================================================
 // Types
@@ -520,8 +521,14 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
   const handleAccept = useCallback(() => {
     if (!editor || !response || !('suggestedText' in response)) return;
     const { from, to } = editor.state.selection;
-    const html = textToHTML(response.suggestedText);
-    editor.chain().focus().deleteRange({ from, to }).insertContent(html).run();
+
+    if (loadTrackChangesEnabled()) {
+      // Track changes mode — defer the edit as a pending diff
+      proposeReplacement(editor, from, to, response.suggestedText, response.action);
+    } else {
+      const html = textToHTML(response.suggestedText);
+      editor.chain().focus().deleteRange({ from, to }).insertContent(html).run();
+    }
     setResponse(null);
   }, [editor, response]);
 
