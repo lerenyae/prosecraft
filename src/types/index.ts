@@ -34,6 +34,7 @@ export interface Chapter {
   title: string;
   sortOrder: number;
   createdAt: Date;
+  notes?: string; // freelance notes attached to the chapter (scratchpad)
 }
 
 export type SceneStatus = 'idea' | 'outline' | 'draft' | 'revised' | 'final';

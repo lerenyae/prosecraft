@@ -284,6 +284,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
     projectChapters,
     chapterScenes,
     setHighlightWord,
+    _hydrated,
   } = useStore();
   const [activePanel, setActivePanel] = useState<PanelTab | null>(null);
   const [selectedText, setSelectedText] = useState('');
@@ -591,19 +592,23 @@ export default function ProjectPage({ params }: ProjectPageProps) {
 
         let body = '';
         if (options.includeTitlePage) {
-          body += `<div style="page-break-after:always;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:9in">
-            <h1 style="font-size:${options.fontSize + 12}pt;margin:0">${escape(currentProject.title)}</h1>
-          </div>`;
+          body += `<section class="title-page">
+            <h1>${escape(currentProject.title)}</h1>
+          </section>`;
         }
 
         projectChapters.forEach((chapter, idx) => {
-          body += `<h2 style="text-align:center;page-break-before:always;margin-top:3rem;font-size:${options.fontSize + 4}pt">${escape(formatChapterHeading(chapter.title, idx))}</h2>`;
+          // Only chapters after the first need a forced page break when there's
+          // no title page; otherwise every chapter starts on a fresh page.
+          const needsBreak = options.includeTitlePage || idx > 0;
+          body += `<section class="chapter${needsBreak ? ' chapter-break' : ''}">`;
+          body += `<h2>${escape(formatChapterHeading(chapter.title, idx))}</h2>`;
           const scenes = chapterScenes(chapter.id);
           scenes.forEach((scene, sIdx) => {
             if (sIdx > 0 && sceneBreakGlyph) {
-              body += `<p style="text-align:center;margin:1.5em 0">${escape(sceneBreakGlyph)}</p>`;
+              body += `<p class="scene-break">${escape(sceneBreakGlyph)}</p>`;
             } else if (sIdx > 0) {
-              body += `<p style="margin:1.5em 0">&nbsp;</p>`;
+              body += `<p class="scene-break">&nbsp;</p>`;
             }
             const text = stripHtml(scene.content).trim();
             text.split(/\n\n+/).forEach((para) => {
@@ -612,36 +617,88 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               // Inline scene break from the editor (TipTap HorizontalRule)
               if (clean === SCENE_BREAK_MARKER) {
                 if (sceneBreakGlyph) {
-                  body += `<p style="text-align:center;margin:1.5em 0">${escape(sceneBreakGlyph)}</p>`;
+                  body += `<p class="scene-break">${escape(sceneBreakGlyph)}</p>`;
                 } else {
-                  body += `<p style="margin:1.5em 0">&nbsp;</p>`;
+                  body += `<p class="scene-break">&nbsp;</p>`;
                 }
                 return;
               }
-              body += `<p style="${indentRule}margin:0 0 .2em 0">${escape(clean)}</p>`;
+              body += `<p class="body-para">${escape(clean)}</p>`;
             });
           });
+          body += `</section>`;
         });
 
         const headerHTML = options.headerText
           ? `<div class="running-header">${escape(options.headerText)}</div>`
           : '';
         const pageNumberCSS = options.includePageNumbers
-          ? `@page { @bottom-center { content: counter(page); font-family: ${options.font}, serif; font-size: ${options.fontSize}pt; } }`
-          : '';
+          ? `@page { margin: ${options.marginInches}in; @bottom-center { content: counter(page); font-family: "${options.font}", serif; font-size: ${options.fontSize}pt; } }`
+          : `@page { margin: ${options.marginInches}in; }`;
 
         win.document.write(`<!doctype html><html><head><title>${escape(currentProject.title)}</title><style>
           ${pageNumberCSS}
-          body{font-family:"${options.font}",Georgia,serif;max-width:${8.5 - options.marginInches * 2}in;margin:${options.marginInches}in auto;line-height:${lineHeight};color:#000;font-size:${options.fontSize}pt}
-          h1{font-size:${options.fontSize + 12}pt;margin-bottom:2rem}
-          h2{font-size:${options.fontSize + 4}pt;margin-bottom:1rem}
-          p{font-size:${options.fontSize}pt}
-          .running-header{position:running(header);text-align:center;font-size:${options.fontSize - 1}pt;color:#555}
-          @media print{ body{margin:0 ${options.marginInches}in} }
+          html, body { background: #fff; color: #000; }
+          body {
+            font-family: "${options.font}", Georgia, serif;
+            font-size: ${options.fontSize}pt;
+            line-height: ${lineHeight};
+            max-width: ${8.5 - options.marginInches * 2}in;
+            margin: ${options.marginInches}in auto;
+          }
+          h1 { font-size: ${options.fontSize + 12}pt; margin: 0 0 2rem 0; }
+          h2 {
+            font-size: ${options.fontSize + 4}pt;
+            text-align: center;
+            margin: 0 0 1.5rem 0;
+            page-break-after: avoid;
+            break-after: avoid-page;
+          }
+          p.body-para {
+            ${indentRule}
+            margin: 0 0 .2em 0;
+            orphans: 2;
+            widows: 2;
+          }
+          p.scene-break {
+            text-align: center;
+            margin: 1.5em 0;
+          }
+          .title-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 9in;
+            text-align: center;
+            page-break-after: always;
+            break-after: page;
+          }
+          .chapter-break {
+            page-break-before: always;
+            break-before: page;
+          }
+          .chapter {
+            padding-top: 1rem;
+          }
+          .running-header {
+            position: running(header);
+            text-align: center;
+            font-size: ${options.fontSize - 1}pt;
+            color: #555;
+          }
+          @media print {
+            body { margin: 0 auto; max-width: ${8.5 - options.marginInches * 2}in; }
+            .chapter-break { page-break-before: always; break-before: page; }
+            .title-page { page-break-after: always; break-after: page; }
+            h2 { page-break-after: avoid; break-after: avoid-page; }
+          }
         </style></head><body>${headerHTML}${body}</body></html>`);
         win.document.close();
         win.focus();
-        setTimeout(() => { win.print(); }, 250);
+        // Give the new window a beat to lay out before invoking print — some
+        // browsers skip page breaks if print() fires before paint.
+        setTimeout(() => { win.print(); }, 400);
         return;
       }
     } finally {
@@ -649,6 +706,20 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       setExportModalOpen(false);
     }
   }, [currentProject, projectChapters, chapterScenes]);
+
+  // Before localStorage hydration finishes, the store reports currentProject=null
+  // even for valid projects. Show a neutral loading state during that window so
+  // we don't flash "Project not found" on every refresh.
+  if (!_hydrated) {
+    return (
+      <div className="min-h-screen bg-[var(--color-bg-primary)] text-[var(--color-text-primary)] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-[var(--color-text-muted)]">
+          <div className="w-6 h-6 border-2 border-[var(--color-accent)] border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm">Loading manuscript…</span>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentProject) {
     return (

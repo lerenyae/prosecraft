@@ -26,6 +26,7 @@ interface StoreState {
   sidebarOpen: boolean;
   focusMode: boolean;
   _dataVersion: number; // bumped on every chapter/scene mutation to invalidate memos
+  _hydrated: boolean; // true once localStorage rehydration has run on the client
 }
 
 type StoreAction =
@@ -119,6 +120,7 @@ const initialState: StoreState = {
   sidebarOpen: true,
   focusMode: false,
   _dataVersion: 0,
+  _hydrated: false,
 };
 
 // ============================================================================
@@ -306,12 +308,12 @@ function saveStateToStorage(state: StoreState): void {
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(storeReducer, initialState);
   const [highlightWord, setHighlightWord] = useState<string | null>(null);
-  // Hydrate from localStorage on mount (client-side only)
+  // Hydrate from localStorage on mount (client-side only). Always flip the
+  // _hydrated flag so consumers (e.g. the project page) can distinguish
+  // "loading from localStorage" from "truly not found".
   useEffect(() => {
     const stored = loadStateFromStorage();
-    if (stored !== initialState) {
-      dispatch({ type: 'INIT', payload: stored });
-    }
+    dispatch({ type: 'INIT', payload: { ...stored, _hydrated: true } });
   }, []);
 
   // Persist state to localStorage whenever it changes

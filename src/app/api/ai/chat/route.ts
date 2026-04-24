@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Allow up to 60s for Whole Book chats. Default Vercel timeout of 10s was
+// causing the Whole Book request to hang for minutes, then fail silently.
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -71,12 +76,13 @@ export async function POST(request: NextRequest) {
     const pos = chapterPosition ? ` (${chapterPosition})` : '';
     const persona = getEditorialPersona(genre);
 
-    // Build memory section if available
     const memorySection = memoryContext
       ? `\n\nPROJECT MEMORY (facts the author has established across sessions):\n${memoryContext}\n\nUse these facts to maintain consistency. Reference them when relevant but do not repeat them back verbatim unless asked.`
       : '';
 
-    // Whole-book context block
+    // Whole-book context block. Cap hard at ~120k chars (~30k tokens) so the
+    // total prompt leaves plenty of headroom inside Sonnet's window and the
+    // 60s function budget.
     let wholeBookSection = '';
     let wholeBookRule = '';
     if (wholeBookContext && wholeBookMode && wholeBookMode !== 'off') {
@@ -84,7 +90,8 @@ export async function POST(request: NextRequest) {
         wholeBookMode === 'full'
           ? 'FULL MANUSCRIPT TEXT (all chapters verbatim)'
           : 'MANUSCRIPT CONTINUITY NOTES (per-chapter structured summaries)';
-      wholeBookSection = `\n\n${modeLabel}:\n===\n${wholeBookContext.slice(0, 180000)}\n${wholeBookContext.length > 180000 ? '\n[...manuscript truncated to fit context]' : ''}\n===`;
+      const truncated = wholeBookContext.slice(0, 120000);
+      wholeBookSection = `\n\n${modeLabel}:\n===\n${truncated}\n${wholeBookContext.length > 120000 ? '\n[...manuscript truncated to fit context]' : ''}\n===`;
       wholeBookRule =
         wholeBookMode === 'full'
           ? '\n- You have the full manuscript above. Cross-reference freely: name drift, timeline gaps, setup/payoff, thematic echoes, tonal consistency. Cite the chapter when pulling from outside the current one.'
@@ -118,19 +125,53 @@ RULES:
       content: m.content,
     }));
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: wholeBookMode && wholeBookMode !== 'off' ? 1200 : 800,
-      system: systemPrompt,
-      messages: apiMessages,
+    const maxTokens = wholeBookMode && wholeBookMode !== 'off' ? 1200 : 800;
+
+    // Stream the response as plain text chunks. ChatPanel consumes the body
+    // as a ReadableStream so the user sees tokens land progressively instead
+    // of staring at a spinner for 60+ seconds on Whole Book prompts.
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          const aiStream = anthropic.messages.stream({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: apiMessages,
+          });
+
+          for await (const event of aiStream) {
+            if (
+              event.type === 'content_block_delta' &&
+              event.delta.type === 'text_delta'
+            ) {
+              controller.enqueue(encoder.encode(event.delta.text));
+            }
+          }
+
+          controller.close();
+        } catch (err) {
+          console.error('Chat stream error:', err);
+          try {
+            controller.enqueue(
+              encoder.encode('\n\n[stream error — please retry]')
+            );
+          } catch {
+            /* noop */
+          }
+          controller.close();
+        }
+      },
     });
 
-    const responseContent = message.content[0];
-    if (responseContent.type !== 'text') {
-      return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
-    }
-
-    return NextResponse.json({ response: responseContent.text });
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-transform',
+        'X-Accel-Buffering': 'no',
+      },
+    });
   } catch (error) {
     console.error('Error in chat route:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

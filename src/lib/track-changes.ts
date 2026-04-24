@@ -128,36 +128,30 @@ export function proposeReplacement(
     return '';
   }
 
-  // Build paragraphs from the proposed plain text so multi-paragraph replacements
-  // land as real block structure, not a single line.
-  const paragraphs = newText
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  // Insert as INLINE text so the replacement stays inside the original
+  // paragraph. Inserting block-level paragraph nodes here splits the host
+  // paragraph, which leaves a visible gap after accept.
+  //
+  // Multi-paragraph suggestions are flattened to one paragraph (separated by
+  // spaces) — AI Toolbar edits are almost always within-paragraph rewrites.
+  const flatText = newText.replace(/\r\n/g, '\n').replace(/\n+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!flatText) return '';
 
-  const insertJSON = paragraphs.length > 0
-    ? paragraphs.map((text) => ({
-        type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text,
-            marks: [{ type: 'trackInsertion', attrs: { changeId, source } }],
-          },
-        ],
-      }))
-    : [];
+  const insertInline = {
+    type: 'text',
+    text: flatText,
+    marks: [{ type: 'trackInsertion', attrs: { changeId, source } }],
+  };
 
   // 1. Mark the original range as a deletion
-  // 2. Insert the new content right after it
+  // 2. Insert the new inline run right after it (same paragraph)
   editor
     .chain()
     .focus()
     .setTextSelection({ from, to })
     .setMark('trackDeletion', { changeId, source })
     .setTextSelection(to)
-    .insertContent(insertJSON)
+    .insertContent(insertInline)
     .run();
 
   return changeId;

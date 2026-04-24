@@ -539,20 +539,40 @@ export default function ChatPanel() {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const assistantMessage: ChatMessage = {
-          role: 'assistant',
-          content: data.response,
-          timestamp: Date.now(),
+      if (res.ok && res.body) {
+        // The route streams text chunks. Seed an empty assistant message,
+        // then append each chunk as it arrives so the user sees progressive
+        // output instead of a long blank wait on Whole Book prompts.
+        const baseMessages = [...updatedMessages];
+        let accumulated = '';
+
+        const appendChunk = (chunk: string) => {
+          accumulated += chunk;
+          setMessages([
+            ...baseMessages,
+            { role: 'assistant', content: accumulated, timestamp: Date.now() },
+          ]);
         };
 
-        const withResponse = [...updatedMessages, assistantMessage];
-        setMessages(withResponse);
-        saveChatHistory(chapterId, withResponse);
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) appendChunk(decoder.decode(value, { stream: true }));
+        }
+        // flush any remaining bytes
+        const tail = decoder.decode();
+        if (tail) appendChunk(tail);
+
+        const finalMessages: ChatMessage[] = [
+          ...baseMessages,
+          { role: 'assistant', content: accumulated, timestamp: Date.now() },
+        ];
+        saveChatHistory(chapterId, finalMessages);
 
         // Try to auto-extract memories
-        extractMemories(data.response);
+        if (accumulated) extractMemories(accumulated);
       }
     } catch {
       // silent fail

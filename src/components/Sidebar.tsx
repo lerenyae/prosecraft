@@ -16,6 +16,7 @@ import {
   Trash2,
   Edit3,
   ExternalLink,
+  StickyNote,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -70,6 +71,9 @@ function SortableChapterItem({
   scenes,
   currentSceneId,
   chapterWordCount,
+  notesOpen,
+  onToggleNotes,
+  onUpdateNotes,
 }: {
   chapterIndex: number;
   chapter: Chapter;
@@ -84,6 +88,9 @@ function SortableChapterItem({
   scenes: Scene[];
   currentSceneId: string | null;
   chapterWordCount: (chapterId: string) => number;
+  notesOpen: boolean;
+  onToggleNotes: (chapterId: string) => void;
+  onUpdateNotes: (chapterId: string, notes: string) => void;
 }) {
   const sortable = useSortable({ id: chapter.id });
   const { isDragging } = sortable;
@@ -150,6 +157,29 @@ function SortableChapterItem({
           )}
         </div>
 
+        {/* Notes toggle */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleNotes(chapter.id);
+          }}
+          title={notesOpen ? 'Hide notes' : 'Chapter notes'}
+          className={`transition-opacity p-1 hover:bg-[var(--color-surface-alt)] rounded ${
+            notesOpen || (chapter.notes && chapter.notes.length > 0)
+              ? 'opacity-100'
+              : 'opacity-0 group-hover:opacity-100'
+          }`}
+        >
+          <StickyNote
+            size={13}
+            className={
+              chapter.notes && chapter.notes.length > 0
+                ? 'text-[var(--color-accent)]'
+                : 'text-[var(--color-text-muted)]'
+            }
+          />
+        </button>
+
         {/* Menu button */}
         <button
           onClick={(e) => {
@@ -161,6 +191,30 @@ function SortableChapterItem({
           <MoreHorizontal size={14} className="text-[var(--color-text-muted)]" />
         </button>
       </div>
+
+      {/* Chapter Notes — collapsible scratchpad */}
+      {notesOpen && (
+        <div className="ml-8 mr-2 mt-1 mb-2 rounded-md border border-[var(--color-border)] bg-[var(--color-surface)]">
+          <div className="flex items-center justify-between px-2 py-1 border-b border-[var(--color-border)]">
+            <span className="text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] font-medium">
+              Notes
+            </span>
+            {chapter.notes && chapter.notes.length > 0 && (
+              <span className="text-[9px] text-[var(--color-text-muted)]">
+                {chapter.notes.length} chars
+              </span>
+            )}
+          </div>
+          <textarea
+            value={chapter.notes || ''}
+            onChange={(e) => onUpdateNotes(chapter.id, e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            placeholder="Quick notes for this chapter..."
+            rows={4}
+            className="w-full resize-y px-2 py-1.5 text-xs bg-transparent text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none"
+          />
+        </div>
+      )}
 
       {/* Scenes (only shown when expanded and multiple scenes exist) */}
       {isExpanded && scenes.length > 1 && (
@@ -308,10 +362,22 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
   } = useStore();
 
   const [expandedChapters, setExpandedChapters] = useState<ExpandedChapters>({});
+  const [notesOpenFor, setNotesOpenFor] = useState<Record<string, boolean>>({});
   const [menuOpen, setMenuOpen] = useState<MenuOpen>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [activeSection, setActiveSection] = useState<SidebarSection>('chapters');
+
+  const handleToggleNotes = useCallback((chapterId: string) => {
+    setNotesOpenFor((prev) => ({ ...prev, [chapterId]: !prev[chapterId] }));
+  }, []);
+
+  const handleUpdateNotes = useCallback(
+    (chapterId: string, notes: string) => {
+      updateChapter(chapterId, { notes });
+    },
+    [updateChapter]
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -491,6 +557,9 @@ export default function Sidebar({ onExport }: { onExport?: () => void }) {
                       scenes={scenes}
                       currentSceneId={currentSceneId}
                       chapterWordCount={chapterWordCount}
+                      notesOpen={notesOpenFor[chapter.id] || false}
+                      onToggleNotes={handleToggleNotes}
+                      onUpdateNotes={handleUpdateNotes}
                     />
                     {menuOpen[`chapter-${chapter.id}`] && (
                       <ContextMenu isOpen={true} onClose={() => handleShowMenu(`chapter-${chapter.id}`)} onRename={() => handleRenameChapter(chapter.id)} onDelete={() => deleteChapter(chapter.id)} />
