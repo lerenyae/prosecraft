@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 
 type InlineAction =
   | 'improve'
@@ -15,7 +16,8 @@ interface InlineEditRequest {
   selectedText: string;
   context: string;
   genre?: string;
-  styleProfile?: string;
+  styleProfile?: string | StyleProfile | null;
+  writerProfile?: WriterProfile | null;
   toneTarget?: string;
 }
 
@@ -95,7 +97,11 @@ function buildUserPrompt(action: InlineAction, selectedText: string, context: st
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as InlineEditRequest;
-    const { action, selectedText, context, genre, styleProfile, toneTarget } = body;
+    const { action, selectedText, context, genre, styleProfile, writerProfile, toneTarget } = body;
+
+    // Normalize styleProfile â accept both legacy string and structured object
+    const styleString = typeof styleProfile === 'string' ? styleProfile : styleProfile?.summary;
+    const structuredStyle = typeof styleProfile === 'object' ? styleProfile : null;
 
     // Validate required fields
     if (!action || !selectedText) {
@@ -134,7 +140,9 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    const systemPrompt = getSystemPrompt(action, genre, styleProfile, toneTarget);
+    const systemPrompt =
+      getSystemPrompt(action, genre, styleString, toneTarget) +
+      buildPersonalizationPrompt(writerProfile, structuredStyle);
     const userPrompt = buildUserPrompt(action, selectedText, context);
 
     const message = await anthropic.messages.create({

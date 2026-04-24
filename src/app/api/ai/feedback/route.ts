@@ -1,12 +1,15 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { MODELS } from '@/lib/ai-models';
+import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 
 interface FeedbackRequest {
   chapterTitle: string;
   chapterContent: string;
   genre?: string;
   priorChaptersSummary?: string;
+  writerProfile?: WriterProfile | null;
+  styleProfile?: StyleProfile | null;
 }
 
 interface ShowDontTellViolation {
@@ -120,7 +123,7 @@ function buildUserPrompt(
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as FeedbackRequest;
-    const { chapterTitle, chapterContent, genre, priorChaptersSummary } = body;
+    const { chapterTitle, chapterContent, genre, priorChaptersSummary, writerProfile, styleProfile } = body;
 
     // Validate required fields
     if (!chapterTitle || !chapterContent) {
@@ -144,7 +147,7 @@ export async function POST(request: NextRequest) {
       apiKey: process.env.ANTHROPIC_API_KEY,
     });
 
-    const systemPrompt = getSystemPrompt(genre);
+    const systemPrompt = getSystemPrompt(genre) + buildPersonalizationPrompt(writerProfile, styleProfile);
     const userPrompt = buildUserPrompt(chapterTitle, plainTextContent, priorChaptersSummary);
 
     const message = await anthropic.messages.create({

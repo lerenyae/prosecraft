@@ -15,6 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { getWriterProfile, getStyleProfile } from '@/lib/personalization';
 import styles from './FeedbackPanel.module.css';
 
 // ============================================================================
@@ -112,6 +113,8 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
           chapterTitle: currentChapter.title,
           chapterContent,
           genre: currentProject.genre,
+          writerProfile: getWriterProfile(),
+          styleProfile: getStyleProfile(currentProject.id),
         }),
       });
 

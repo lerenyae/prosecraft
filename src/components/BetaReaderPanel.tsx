@@ -23,6 +23,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { getWriterProfile, getStyleProfile } from '@/lib/personalization';
 
 // ============================================================================
 // Types
@@ -113,6 +114,8 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
           chapterTitle: currentChapter.title,
           chapterContent: content,
           genre: currentProject.genre,
+          writerProfile: getWriterProfile(),
+          styleProfile: getStyleProfile(currentProject.id),
         }),
       });
 
@@ -149,6 +152,8 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
           mode: 'selection',
           selectedText,
           genre: currentProject.genre,
+          writerProfile: getWriterProfile(),
+          styleProfile: getStyleProfile(currentProject.id),
         }),
       });
 

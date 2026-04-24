@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { MODELS } from '@/lib/ai-models';
+import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 
 interface AnalyzeRequest {
   mode: 'chapter' | 'selection';
@@ -11,6 +12,8 @@ interface AnalyzeRequest {
   genre?: string;
   chapterNumber?: number;
   totalChapters?: number;
+  writerProfile?: WriterProfile | null;
+  styleProfile?: StyleProfile | null;
 }
 
 function stripHtml(html: string): string {
@@ -106,7 +109,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
 
-    const { mode, genre } = body;
+    const { mode, genre, writerProfile, styleProfile } = body;
 
     let systemPrompt: string;
     let userPrompt: string;
@@ -141,7 +144,7 @@ export async function POST(request: NextRequest) {
     const message = await anthropic.messages.create({
       model: MODELS.DEEP,
       max_tokens: 4096,
-      system: systemPrompt,
+      system: systemPrompt + buildPersonalizationPrompt(writerProfile, styleProfile),
       messages: [{ role: 'user', content: userPrompt }],
     });
 
