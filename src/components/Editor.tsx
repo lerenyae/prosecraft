@@ -143,17 +143,27 @@ function createSearchHighlightExtension() {
 
 function SearchBar({ editor, searchTerm, onClose }: { editor: TipTapEditor; searchTerm: string; onClose: () => void }) {
   const [activeIndex, setActiveIndex] = useState(0);
-  const totalMatches = (editor.storage as any).searchHighlight?.totalMatches || 0;
+  const [totalMatches, setTotalMatches] = useState(0);
 
-  // Apply search decorations
+  // Apply search decorations, then read the resulting match count from storage.
+  // This fixes the first-click no-op: previously we read storage at render time,
+  // before the dispatch actually ran.
   useEffect(() => {
     if (!editor) return;
     const tr = editor.state.tr;
     tr.setMeta(searchHighlightKey, { searchTerm, activeIndex });
     editor.view.dispatch(tr);
+    // After dispatch, storage is updated synchronously by the plugin's apply()
+    const count = (editor.storage as any).searchHighlight?.totalMatches ?? 0;
+    setTotalMatches(count);
+    // If new term has fewer matches than activeIndex, reset to 0
+    if (count > 0 && activeIndex >= count) {
+      setActiveIndex(0);
+    }
   }, [editor, searchTerm, activeIndex]);
 
-  // Scroll to active match
+  // Scroll to active match — runs after totalMatches is set so the first
+  // highlight click actually jumps to the word.
   useEffect(() => {
     if (!editor || totalMatches === 0) return;
     const decorations = searchHighlightKey.getState(editor.state);
@@ -161,14 +171,21 @@ function SearchBar({ editor, searchTerm, onClose }: { editor: TipTapEditor; sear
     const found = decorations.find();
     if (found[activeIndex]) {
       const pos = found[activeIndex].from;
-      const domAtPos = editor.view.domAtPos(pos);
-      if (domAtPos.node instanceof HTMLElement) {
-        domAtPos.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } else if (domAtPos.node.parentElement) {
-        domAtPos.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
+      // Defer to next frame so layout settles before scrolling
+      requestAnimationFrame(() => {
+        try {
+          const domAtPos = editor.view.domAtPos(pos);
+          if (domAtPos.node instanceof HTMLElement) {
+            domAtPos.node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else if (domAtPos.node.parentElement) {
+            domAtPos.node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } catch {
+          // domAtPos can throw if the doc mutated between dispatch and rAF; safe to ignore
+        }
+      });
     }
-  }, [editor, activeIndex, totalMatches]);
+  }, [editor, activeIndex, totalMatches, searchTerm]);
 
   const goNext = useCallback(() => {
     setActiveIndex(prev => (prev + 1) % Math.max(1, totalMatches));

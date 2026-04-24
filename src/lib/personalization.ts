@@ -64,6 +64,36 @@ export function getStyleProfile(projectId: string): StyleProfile | null {
 }
 
 /**
+ * Per-project writing rules: hard constraints the author wants AI to respect.
+ * Examples: "No em dashes", "No adverbs ending in -ly", "Never use 'very'".
+ * Stored as a simple string[] under prosecraft-rules-<projectId>.
+ */
+export function getWritingRules(projectId: string): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(`prosecraft-rules-${projectId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((r: unknown): r is string => typeof r === 'string' && r.trim().length > 0);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+export function setWritingRules(projectId: string, rules: string[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const cleaned = rules.map(r => r.trim()).filter(Boolean);
+    localStorage.setItem(`prosecraft-rules-${projectId}`, JSON.stringify(cleaned));
+  } catch {
+    // ignore
+  }
+}
+
+/**
  * Build a compact personalization block for injection into AI system prompts.
  * Returns empty string if no profiles are set so AI routes stay agnostic.
  */

@@ -1,7 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
-import { MODELS } from '@/lib/ai-models';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
+import { runAIRequest, parseAIJson, AIRequestError } from '@/lib/ai-request';
 
 interface FeedbackRequest {
   chapterTitle: string;
@@ -10,6 +9,7 @@ interface FeedbackRequest {
   priorChaptersSummary?: string;
   writerProfile?: WriterProfile | null;
   styleProfile?: StyleProfile | null;
+  writingRules?: string[] | null;
 }
 
 interface ShowDontTellViolation {
@@ -42,14 +42,9 @@ interface DevelopmentalFeedback {
 }
 
 function stripHtml(html: string): string {
-  // Remove script and style tags and their content
   let text = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-
-  // Remove all HTML tags
   text = text.replace(/<[^>]+>/g, '');
-
-  // Decode HTML entities
   text = text
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
@@ -57,11 +52,15 @@ function stripHtml(html: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#039;/g, "'")
     .replace(/&amp;/g, '&');
-
-  // Normalize whitespace
   text = text.replace(/\s+/g, ' ').trim();
-
   return text;
+}
+
+function buildWritingRulesBlock(rules?: string[] | null): string {
+  if (!rules || rules.length === 0) return '';
+  const cleaned = rules.map(r => r.trim()).filter(Boolean);
+  if (!cleaned.length) return '';
+  return `\n\n---\nWRITING RULES (hard constraints from the author):\n- ${cleaned.join('\n- ')}\n\nAny rewrite you produce MUST respect these rules. Flag violations in the author's own prose under "priorities".\n---\n`;
 }
 
 function getSystemPrompt(genre?: string): string {
@@ -110,103 +109,61 @@ function buildUserPrompt(
   priorChaptersSummary?: string
 ): string {
   let prompt = `Chapter Title: "${chapterTitle}"\n\nChapter Content:\n${chapterContent}`;
-
   if (priorChaptersSummary) {
     prompt = `Prior Chapters Summary:\n${priorChaptersSummary}\n\n${prompt}`;
   }
-
   prompt += '\n\nPlease provide developmental feedback on this chapter.';
-
   return prompt;
 }
 
 export async function POST(request: NextRequest) {
+  let body: FeedbackRequest;
   try {
-    const body = (await request.json()) as FeedbackRequest;
-    const { chapterTitle, chapterContent, genre, priorChaptersSummary, writerProfile, styleProfile } = body;
+    body = (await request.json()) as FeedbackRequest;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
 
-    // Validate required fields
-    if (!chapterTitle || !chapterContent) {
-      return NextResponse.json(
-        { error: 'Missing required fields: chapterTitle and chapterContent' },
-        { status: 400 }
-      );
-    }
+  const { chapterTitle, chapterContent, genre, priorChaptersSummary, writerProfile, styleProfile, writingRules } = body;
 
-    // Strip HTML tags from content
-    const plainTextContent = stripHtml(chapterContent);
-
-    if (plainTextContent.length === 0) {
-      return NextResponse.json(
-        { error: 'Chapter content is empty after HTML stripping' },
-        { status: 400 }
-      );
-    }
-
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
-
-    const systemPrompt = getSystemPrompt(genre) + buildPersonalizationPrompt(writerProfile, styleProfile);
-    const userPrompt = buildUserPrompt(chapterTitle, plainTextContent, priorChaptersSummary);
-
-    const message = await anthropic.messages.create({
-      model: MODELS.DEEP,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: userPrompt,
-        },
-      ],
-    });
-
-    // Extract the text response
-    const responseContent = message.content[0];
-    if (responseContent.type !== 'text') {
-      return NextResponse.json(
-        { error: 'Unexpected response type from API' },
-        { status: 500 }
-      );
-    }
-
-    let feedback: DevelopmentalFeedback;
-
-    try {
-      // Remove markdown code blocks if present
-      let jsonString = responseContent.text.trim();
-      if (jsonString.startsWith('```json')) {
-        jsonString = jsonString.slice(7); // Remove ```json
-      } else if (jsonString.startsWith('```')) {
-        jsonString = jsonString.slice(3); // Remove ```
-      }
-      if (jsonString.endsWith('```')) {
-        jsonString = jsonString.slice(0, -3); // Remove trailing ```
-      }
-      feedback = JSON.parse(jsonString.trim()) as DevelopmentalFeedback;
-    } catch (parseError) {
-      console.error('Error parsing feedback JSON:', parseError);
-      return NextResponse.json(
-        { error: 'Failed to parse feedback from AI response' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(feedback);
-  } catch (error) {
-    console.error('Error in feedback AI route:', error);
-
-    if (error instanceof SyntaxError) {
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
-    }
-
+  if (!chapterTitle || !chapterContent) {
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: 'Missing required fields: chapterTitle and chapterContent' },
+      { status: 400 }
     );
+  }
+
+  const plainTextContent = stripHtml(chapterContent);
+
+  if (plainTextContent.length === 0) {
+    return NextResponse.json(
+      { error: 'Chapter content is empty after HTML stripping' },
+      { status: 400 }
+    );
+  }
+
+  const systemPrompt =
+    getSystemPrompt(genre) +
+    buildPersonalizationPrompt(writerProfile, styleProfile) +
+    buildWritingRulesBlock(writingRules);
+  const userPrompt = buildUserPrompt(chapterTitle, plainTextContent, priorChaptersSummary);
+
+  try {
+    const { text, modelUsed, fallbackUsed } = await runAIRequest({
+      tier: 'DEEP',
+      system: systemPrompt,
+      userPrompt,
+      maxTokens: 4096,
+    });
+
+    const feedback = parseAIJson<DevelopmentalFeedback>(text);
+    return NextResponse.json({ ...feedback, _meta: { modelUsed, fallbackUsed } });
+  } catch (error) {
+    if (error instanceof AIRequestError) {
+      return NextResponse.json({ error: error.publicMessage }, { status: error.status });
+    }
+    console.error('Error in feedback AI route:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: `Feedback failed: ${msg}` }, { status: 500 });
   }
 }

@@ -24,6 +24,43 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
+import { getWritingRules, setWritingRules } from '@/lib/personalization';
+import { Info, Plus, Shield } from 'lucide-react';
+
+/**
+ * Hover/click info tooltip. Pass `text` (short explanation) and optionally
+ * `title`. Icon sits inline with section headers.
+ */
+function InfoTip({ text, title }: { text: string; title?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+        aria-label={title || 'More info'}
+      >
+        <Info size={12} />
+      </button>
+      {open && (
+        <span
+          className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-64 p-2.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] shadow-lg text-[11px] text-[var(--color-text-secondary)] leading-snug"
+          role="tooltip"
+        >
+          {title && (
+            <span className="block text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1 font-medium">
+              {title}
+            </span>
+          )}
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ').trim();
@@ -74,7 +111,7 @@ function getOverusedWords(text: string): { word: string; count: number }[] {
       word,
       count: (lower.match(new RegExp(`\\b${word}\\b`, 'g')) || []).length,
     }))
-    .filter(w => w.count >= 3)
+    .filter(w => w.count >= 2)
     .sort((a, b) => b.count - a.count);
 }
 
@@ -130,6 +167,11 @@ export default function InsightsPanel() {
   const [styleLoading, setStyleLoading] = useState(false);
   const [styleExpanded, setStyleExpanded] = useState(true);
 
+  // Writing rules state (per-project hard constraints for AI)
+  const [rules, setRules] = useState<string[]>([]);
+  const [rulesExpanded, setRulesExpanded] = useState(false);
+  const [newRule, setNewRule] = useState('');
+
   // Load saved style profile for current project
   useEffect(() => {
     if (!currentProject) return;
@@ -141,6 +183,42 @@ export default function InsightsPanel() {
       setStyleProfile(null);
     }
   }, [currentProject]);
+
+  // Load writing rules for current project
+  useEffect(() => {
+    if (!currentProject) {
+      setRules([]);
+      return;
+    }
+    setRules(getWritingRules(currentProject.id));
+  }, [currentProject]);
+
+  const addRule = useCallback(() => {
+    if (!currentProject) return;
+    const trimmed = newRule.trim();
+    if (!trimmed) return;
+    const next = [...rules, trimmed];
+    setRules(next);
+    setWritingRules(currentProject.id, next);
+    setNewRule('');
+  }, [currentProject, newRule, rules]);
+
+  const removeRule = useCallback((idx: number) => {
+    if (!currentProject) return;
+    const next = rules.filter((_, i) => i !== idx);
+    setRules(next);
+    setWritingRules(currentProject.id, next);
+  }, [currentProject, rules]);
+
+  const RULE_PRESETS = [
+    'No em dashes',
+    'No adverbs ending in -ly',
+    'Never use the word "very"',
+    'No semicolons',
+    'Avoid filter words (felt, saw, heard, thought)',
+    'Active voice only',
+    'No rhetorical questions in narration',
+  ];
 
   // Track session start word count
   useEffect(() => {
@@ -349,6 +427,10 @@ export default function InsightsPanel() {
           <div className="flex items-center gap-2">
             <Zap size={14} className="text-[var(--color-accent)]" />
             <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Quick Scan</p>
+            <InfoTip
+              title="Quick Scan"
+              text="Fast AI read of the current chapter. Returns a one-line verdict, scores pacing/tension/dialogue/prose, and flags issues. Uses the fast model — seconds, not minutes."
+            />
           </div>
           <div className="flex items-center gap-1">
             {scanResult && (
@@ -460,6 +542,10 @@ export default function InsightsPanel() {
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-[var(--color-accent)]" />
             <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">Style Profile</p>
+            <InfoTip
+              title="Style Profile"
+              text='Generates a "voice fingerprint" from your manuscript: tone, sentence rhythm, go-to words, tics, and influences. Once generated, every AI rewrite (inline edits, beta reader, feedback) is told to preserve this voice instead of flattening it into generic prose. Regenerate after major revisions.'
+            />
           </div>
           <div className="flex items-center gap-1">
             {styleProfile && (
@@ -611,6 +697,130 @@ export default function InsightsPanel() {
                 <p className="text-[var(--color-text-secondary)]">
                   {styleProfile.influences.join(' Â· ')}
                 </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Writing Rules */}
+      <div className="p-4 rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <Shield size={14} className="text-[var(--color-accent)]" />
+            <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
+              Writing Rules
+            </p>
+            <InfoTip
+              title="Writing Rules"
+              text='Hard constraints the AI must respect in every rewrite, suggestion, and beta read. Examples: "No em dashes", "No adverbs ending in -ly", "Never use the word very". Rules are stored per project.'
+            />
+            {rules.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-[var(--color-accent)]/15 text-[var(--color-accent)] font-medium">
+                {rules.length}
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setRulesExpanded(!rulesExpanded)}
+            className="p-1 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+          >
+            {rulesExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+        </div>
+
+        {!rulesExpanded && rules.length === 0 && (
+          <p className="text-xs text-[var(--color-text-muted)]">
+            No rules set. Expand to add constraints the AI must follow.
+          </p>
+        )}
+
+        {!rulesExpanded && rules.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {rules.slice(0, 3).map((r, i) => (
+              <span key={i} className="px-2 py-0.5 rounded-md text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)]">
+                {r}
+              </span>
+            ))}
+            {rules.length > 3 && (
+              <span className="px-2 py-0.5 rounded-md text-[10px] text-[var(--color-text-muted)]">
+                +{rules.length - 3} more
+              </span>
+            )}
+          </div>
+        )}
+
+        {rulesExpanded && (
+          <div className="flex flex-col gap-2.5 mt-2">
+            {rules.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {rules.map((r, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[var(--color-surface-alt)] border border-[var(--color-border)]"
+                  >
+                    <span className="flex-1 text-xs text-[var(--color-text-secondary)]">{r}</span>
+                    <button
+                      onClick={() => removeRule(i)}
+                      className="p-0.5 text-[var(--color-text-muted)] hover:text-red-500 transition-colors"
+                      title="Remove rule"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={newRule}
+                onChange={e => setNewRule(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addRule();
+                  }
+                }}
+                placeholder='e.g. "No em dashes"'
+                className="flex-1 px-2.5 py-1.5 text-xs rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-accent)]"
+              />
+              <button
+                onClick={addRule}
+                disabled={!newRule.trim()}
+                className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${
+                  newRule.trim()
+                    ? 'bg-[var(--color-accent)] text-[var(--color-bg-primary)] hover:bg-[var(--color-accent-dark)]'
+                    : 'bg-[var(--color-surface-alt)] text-[var(--color-text-muted)] cursor-not-allowed'
+                }`}
+              >
+                <Plus size={12} />
+                Add
+              </button>
+            </div>
+
+            {rules.length === 0 && (
+              <div>
+                <p className="text-[10px] uppercase font-medium text-[var(--color-text-muted)] mb-1.5">
+                  Common presets
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {RULE_PRESETS.map(preset => (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        if (!currentProject) return;
+                        const next = [...rules, preset];
+                        setRules(next);
+                        setWritingRules(currentProject.id, next);
+                      }}
+                      className="px-2 py-0.5 rounded-md text-[10px] bg-[var(--color-surface-alt)] text-[var(--color-text-secondary)] hover:bg-[var(--color-accent)]/15 hover:text-[var(--color-accent)] border border-[var(--color-border)] transition-colors"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -949,6 +1159,10 @@ export default function InsightsPanel() {
               <p className="text-xs text-[var(--color-text-muted)] font-medium uppercase tracking-wide">
                 Filter Words {chapterTitle ? `\u2014 ${chapterTitle}` : ''}
               </p>
+              <InfoTip
+                title="Filter Words"
+                text='Words that distance the reader from the action — "felt", "looked", "seemed", "realized", "just", "very". Shows counts from this chapter. Click a badge to jump to the word in the editor; "Why these?" asks the AI to show concrete rewrites.'
+              />
             </div>
             <button
               onClick={runFilterAnalysis}

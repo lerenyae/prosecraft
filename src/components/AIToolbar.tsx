@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { getWriterProfile, getStyleProfile } from '@/lib/personalization';
+import { getWriterProfile, getStyleProfile, getWritingRules } from '@/lib/personalization';
 
 // ============================================================================
 // Types
@@ -322,6 +322,7 @@ export function AIToolbar({ editor, selectedText }: AIToolbarProps) {
           toneTarget,
           writerProfile: getWriterProfile(),
           styleProfile: getStyleProfile(currentProject.id),
+          writingRules: getWritingRules(currentProject.id),
         }),
       });
 

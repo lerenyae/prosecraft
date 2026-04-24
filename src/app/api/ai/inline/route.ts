@@ -19,6 +19,14 @@ interface InlineEditRequest {
   styleProfile?: string | StyleProfile | null;
   writerProfile?: WriterProfile | null;
   toneTarget?: string;
+  writingRules?: string[] | null;
+}
+
+function buildWritingRulesBlock(rules?: string[] | null): string {
+  if (!rules || rules.length === 0) return '';
+  const cleaned = rules.map(r => r.trim()).filter(Boolean);
+  if (!cleaned.length) return '';
+  return `\n\n---\nWRITING RULES (hard constraints from the author — these override stylistic defaults):\n- ${cleaned.join('\n- ')}\n\nYour rewrite MUST respect these rules. If following a rule would break grammar or meaning, prefer rephrasing to dropping the rule.\n---\n`;
 }
 
 interface DialogueCoachFeedback {
@@ -97,7 +105,7 @@ function buildUserPrompt(action: InlineAction, selectedText: string, context: st
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as InlineEditRequest;
-    const { action, selectedText, context, genre, styleProfile, writerProfile, toneTarget } = body;
+    const { action, selectedText, context, genre, styleProfile, writerProfile, toneTarget, writingRules } = body;
 
     // Normalize styleProfile â accept both legacy string and structured object
     const styleString = typeof styleProfile === 'string' ? styleProfile : styleProfile?.summary;
@@ -142,7 +150,8 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt =
       getSystemPrompt(action, genre, styleString, toneTarget) +
-      buildPersonalizationPrompt(writerProfile, structuredStyle);
+      buildPersonalizationPrompt(writerProfile, structuredStyle) +
+      buildWritingRulesBlock(writingRules);
     const userPrompt = buildUserPrompt(action, selectedText, context);
 
     const message = await anthropic.messages.create({

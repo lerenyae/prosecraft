@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Activity,
   Users,
@@ -40,18 +40,51 @@ import type {
 // Sub-components
 // ============================================================================
 
+function InfoPopover({ text, title }: { text: string; title?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center">
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); setOpen(v => !v); }}
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className="p-0.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
+        aria-label={title || 'More info'}
+      >
+        <Info size={12} />
+      </button>
+      {open && (
+        <span
+          className="absolute left-5 top-1/2 -translate-y-1/2 z-50 w-64 p-2.5 rounded-md bg-[var(--color-bg-primary)] border border-[var(--color-border)] shadow-lg text-[11px] text-[var(--color-text-secondary)] leading-snug text-left normal-case tracking-normal font-normal"
+          role="tooltip"
+        >
+          {title && (
+            <span className="block text-[10px] uppercase tracking-wide text-[var(--color-text-muted)] mb-1 font-medium">
+              {title}
+            </span>
+          )}
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function SectionHeader({
   icon: Icon,
   title,
   count,
   expanded,
   onToggle,
+  info,
 }: {
   icon: typeof Activity;
   title: string;
   count?: number;
   expanded: boolean;
   onToggle: () => void;
+  info?: { title?: string; text: string };
 }) {
   return (
     <button
@@ -59,9 +92,11 @@ function SectionHeader({
       className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-[var(--color-surface-alt)] transition-colors"
     >
       <Icon size={14} className="text-[var(--color-accent)] flex-shrink-0" />
-      <span className="text-xs font-semibold text-[var(--color-text-primary)] uppercase tracking-wider flex-1 text-left">
+      <span className="text-xs font-semibold text-[var(--color-text-primary)] uppercase tracking-wider text-left">
         {title}
       </span>
+      {info && <InfoPopover title={info.title} text={info.text} />}
+      <span className="flex-1" />
       {count !== undefined && count > 0 && (
         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[var(--color-accent)] text-white min-w-[20px] text-center">
           {count}
@@ -494,6 +529,32 @@ export default function StoryIntelPanel() {
     alerts: true,
   });
 
+  // Beat Sheet Mode: opt-in. When off, Beat Alignment and Consistency panels
+  // are hidden — they're only useful if the author is tracking against a beat
+  // sheet structure.
+  const [beatSheetEnabled, setBeatSheetEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!currentProjectId) return;
+    try {
+      const raw = localStorage.getItem(`prosecraft-beatsheet-${currentProjectId}`);
+      setBeatSheetEnabled(raw === 'true');
+    } catch {
+      setBeatSheetEnabled(false);
+    }
+  }, [currentProjectId]);
+
+  const toggleBeatSheetMode = useCallback(() => {
+    if (!currentProjectId) return;
+    const next = !beatSheetEnabled;
+    setBeatSheetEnabled(next);
+    try {
+      localStorage.setItem(`prosecraft-beatsheet-${currentProjectId}`, String(next));
+    } catch {
+      // ignore
+    }
+  }, [beatSheetEnabled, currentProjectId]);
+
   const triggerRefresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   const toggleSection = (key: string) => {
@@ -555,6 +616,10 @@ export default function StoryIntelPanel() {
           title="Story Progress"
           expanded={expandedSections.progress}
           onToggle={() => toggleSection('progress')}
+          info={{
+            title: 'Story Progress',
+            text: 'Where you are in the manuscript vs. your target word count, broken down by structural phase (setup, rising action, climax, resolution).',
+          }}
         />
         {expandedSections.progress && <StoryProgressSection ctx={storyContext} />}
       </div>
@@ -567,20 +632,12 @@ export default function StoryIntelPanel() {
           count={storyContext.activeCharacters.length}
           expanded={expandedSections.characters}
           onToggle={() => toggleSection('characters')}
+          info={{
+            title: 'Active Characters',
+            text: 'Characters mentioned in the current chapter and their recent appearances. Useful for spotting who has gone missing from the page or who is overcrowding a scene.',
+          }}
         />
         {expandedSections.characters && <CharactersSection ctx={storyContext} />}
-      </div>
-
-      {/* Beat Alignment */}
-      <div className="border-b border-[var(--color-border)]">
-        <SectionHeader
-          icon={Target}
-          title="Beat Alignment"
-          count={storyContext.completedBeats.length}
-          expanded={expandedSections.beats}
-          onToggle={() => toggleSection('beats')}
-        />
-        {expandedSections.beats && <BeatAlignmentSection ctx={storyContext} />}
       </div>
 
       {/* Thread Tracker */}
@@ -591,6 +648,10 @@ export default function StoryIntelPanel() {
           count={storyContext.activeThreads.length}
           expanded={expandedSections.threads}
           onToggle={() => toggleSection('threads')}
+          info={{
+            title: 'Story Threads',
+            text: 'Subplots and running questions (romance, mystery, mentor arc, etc.). Track which chapter last touched each thread so nothing gets dropped.',
+          }}
         />
         {expandedSections.threads && (
           <ThreadTrackerSection
@@ -601,16 +662,68 @@ export default function StoryIntelPanel() {
         )}
       </div>
 
-      {/* Consistency Alerts */}
-      <div>
-        <SectionHeader
-          icon={AlertTriangle}
-          title="Consistency"
-          count={alertCount}
-          expanded={expandedSections.alerts}
-          onToggle={() => toggleSection('alerts')}
-        />
-        {expandedSections.alerts && <AlertsSection ctx={storyContext} />}
+      {/* Beat Sheet Mode — opt-in gate for Beat Alignment + Consistency */}
+      {beatSheetEnabled ? (
+        <>
+          {/* Beat Alignment */}
+          <div className="border-b border-[var(--color-border)]">
+            <SectionHeader
+              icon={Target}
+              title="Beat Alignment"
+              count={storyContext.completedBeats.length}
+              expanded={expandedSections.beats}
+              onToggle={() => toggleSection('beats')}
+              info={{
+                title: 'Beat Alignment',
+                text: 'Compares your chapters against a classic story beat sheet (inciting incident, midpoint, climax, etc.) and flags when a beat is missing or off-position. Requires you to map your chapters to beats.',
+              }}
+            />
+            {expandedSections.beats && <BeatAlignmentSection ctx={storyContext} />}
+          </div>
+
+          {/* Consistency Alerts */}
+          <div className="border-b border-[var(--color-border)]">
+            <SectionHeader
+              icon={AlertTriangle}
+              title="Consistency"
+              count={alertCount}
+              expanded={expandedSections.alerts}
+              onToggle={() => toggleSection('alerts')}
+              info={{
+                title: 'Consistency Alerts',
+                text: 'Warnings about beat/structure drift: scenes that fall outside their expected arc phase, dropped threads, or missing beats. Only useful if you\'re working to a beat sheet.',
+              }}
+            />
+            {expandedSections.alerts && <AlertsSection ctx={storyContext} />}
+          </div>
+        </>
+      ) : null}
+
+      {/* Beat Sheet Mode Toggle */}
+      <div className="p-3 border-b border-[var(--color-border)] bg-[var(--color-surface)]/50">
+        <button
+          onClick={toggleBeatSheetMode}
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-dashed border-[var(--color-border)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-alt)] transition-colors text-left"
+        >
+          {beatSheetEnabled ? (
+            <>
+              <EyeOff size={12} className="text-[var(--color-text-muted)] flex-shrink-0" />
+              <span className="text-[11px] text-[var(--color-text-secondary)] flex-1">
+                Hide Beat Sheet panels
+              </span>
+            </>
+          ) : (
+            <>
+              <Target size={12} className="text-[var(--color-accent)] flex-shrink-0" />
+              <span className="text-[11px] text-[var(--color-text-secondary)] flex-1">
+                <span className="font-medium">Enable Beat Sheet Mode</span>
+                <span className="block text-[10px] text-[var(--color-text-muted)] mt-0.5 normal-case">
+                  Adds Beat Alignment + Consistency panels. For writers using a classic beat sheet structure.
+                </span>
+              </span>
+            </>
+          )}
+        </button>
       </div>
     </div>
   );

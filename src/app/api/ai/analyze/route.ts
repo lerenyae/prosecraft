@@ -1,7 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
-import { MODELS } from '@/lib/ai-models';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
+import { runAIRequest, parseAIJson, AIRequestError } from '@/lib/ai-request';
 
 interface AnalyzeRequest {
   mode: 'chapter' | 'selection';
@@ -14,6 +13,7 @@ interface AnalyzeRequest {
   totalChapters?: number;
   writerProfile?: WriterProfile | null;
   styleProfile?: StyleProfile | null;
+  writingRules?: string[] | null;
 }
 
 function stripHtml(html: string): string {
@@ -23,6 +23,13 @@ function stripHtml(html: string): string {
   text = text.replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&amp;/g, '&');
   text = text.replace(/\s+/g, ' ').trim();
   return text;
+}
+
+function buildWritingRulesBlock(rules?: string[] | null): string {
+  if (!rules || rules.length === 0) return '';
+  const cleaned = rules.map(r => r.trim()).filter(Boolean);
+  if (!cleaned.length) return '';
+  return `\n\n---\nWRITING RULES (hard constraints from the author):\n- ${cleaned.join('\n- ')}\n\nAny suggestion or rewrite you produce MUST respect these rules. If the author's own prose already violates a rule, flag it as a warning annotation.\n---\n`;
 }
 
 function getChapterPrompt(genre?: string): string {
@@ -101,86 +108,69 @@ Rules:
 }
 
 export async function POST(request: NextRequest) {
+  let body: AnalyzeRequest;
   try {
-    let body: AnalyzeRequest;
-    try {
-      body = (await request.json()) as AnalyzeRequest;
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    body = (await request.json()) as AnalyzeRequest;
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+  }
+
+  const { mode, genre, writerProfile, styleProfile, writingRules } = body;
+
+  let systemPrompt: string;
+  let userPrompt: string;
+
+  if (mode === 'selection') {
+    if (!body.selectedText) {
+      return NextResponse.json({ error: 'Missing selectedText' }, { status: 400 });
     }
-
-    const { mode, genre, writerProfile, styleProfile } = body;
-
-    let systemPrompt: string;
-    let userPrompt: string;
-
-    if (mode === 'selection') {
-      if (!body.selectedText) {
-        return NextResponse.json({ error: 'Missing selectedText' }, { status: 400 });
-      }
-      systemPrompt = getSelectionPrompt(genre);
-      userPrompt = body.context
-        ? `Context (surrounding text):\n${body.context}\n\nSelected passage to analyze:\n${body.selectedText}`
-        : `Selected passage to analyze:\n${body.selectedText}`;
-    } else {
-      if (!body.chapterContent) {
-        return NextResponse.json({ error: 'Missing chapterContent' }, { status: 400 });
-      }
-      const plainText = stripHtml(body.chapterContent);
-      if (plainText.length === 0) {
-        return NextResponse.json({ error: 'Chapter content is empty' }, { status: 400 });
-      }
-      systemPrompt = getChapterPrompt(genre);
-      const positionContext = body.chapterNumber && body.totalChapters
-        ? `[This is chapter ${body.chapterNumber} of ${body.totalChapters} in the manuscript]\n\n`
-        : '';
-      userPrompt = body.chapterTitle
-        ? `${positionContext}Chapter: "${body.chapterTitle}"\n\n${plainText}`
-        : `${positionContext}${plainText}`;
+    systemPrompt = getSelectionPrompt(genre);
+    userPrompt = body.context
+      ? `Context (surrounding text):\n${body.context}\n\nSelected passage to analyze:\n${body.selectedText}`
+      : `Selected passage to analyze:\n${body.selectedText}`;
+  } else {
+    if (!body.chapterContent) {
+      return NextResponse.json({ error: 'Missing chapterContent' }, { status: 400 });
     }
+    const plainText = stripHtml(body.chapterContent);
+    if (plainText.length === 0) {
+      return NextResponse.json({ error: 'Chapter content is empty' }, { status: 400 });
+    }
+    systemPrompt = getChapterPrompt(genre);
+    const positionContext = body.chapterNumber && body.totalChapters
+      ? `[This is chapter ${body.chapterNumber} of ${body.totalChapters} in the manuscript]\n\n`
+      : '';
+    userPrompt = body.chapterTitle
+      ? `${positionContext}Chapter: "${body.chapterTitle}"\n\n${plainText}`
+      : `${positionContext}${plainText}`;
+  }
 
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const fullSystem =
+    systemPrompt +
+    buildPersonalizationPrompt(writerProfile, styleProfile) +
+    buildWritingRulesBlock(writingRules);
 
-    const message = await anthropic.messages.create({
-      model: MODELS.DEEP,
-      max_tokens: 4096,
-      system: systemPrompt + buildPersonalizationPrompt(writerProfile, styleProfile),
-      messages: [{ role: 'user', content: userPrompt }],
+  try {
+    const { text, modelUsed, fallbackUsed } = await runAIRequest({
+      tier: 'DEEP',
+      system: fullSystem,
+      userPrompt,
+      maxTokens: 4096,
     });
 
-    const responseContent = message.content[0];
-    if (responseContent.type !== 'text') {
-      return NextResponse.json({ error: 'Unexpected response type' }, { status: 500 });
-    }
-
-    let jsonString = responseContent.text.trim();
-    if (jsonString.startsWith('```json')) jsonString = jsonString.slice(7);
-    else if (jsonString.startsWith('```')) jsonString = jsonString.slice(3);
-    if (jsonString.endsWith('```')) jsonString = jsonString.slice(0, -3);
-
-    let result;
-    try {
-      result = JSON.parse(jsonString.trim());
-    } catch {
-      console.error('Failed to parse AI response as JSON:', jsonString.substring(0, 500));
-      return NextResponse.json(
-        { error: 'AI returned invalid response format. Please try again.' },
-        { status: 502 }
-      );
-    }
-
-    // Add IDs to annotations
+    const result = parseAIJson<{ annotations?: any[]; summary?: unknown }>(text);
     result.annotations = (result.annotations || []).map((a: any, i: number) => ({
       ...a,
       id: `ann-${Date.now()}-${i}`,
     }));
 
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, _meta: { modelUsed, fallbackUsed } });
   } catch (error) {
+    if (error instanceof AIRequestError) {
+      return NextResponse.json({ error: error.publicMessage }, { status: error.status });
+    }
     console.error('Error in analyze route:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({ error: `Analyze failed: ${msg}` }, { status: 500 });
   }
 }

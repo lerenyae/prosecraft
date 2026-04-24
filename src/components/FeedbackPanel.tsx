@@ -15,7 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
-import { getWriterProfile, getStyleProfile } from '@/lib/personalization';
+import { getWriterProfile, getStyleProfile, getWritingRules } from '@/lib/personalization';
 import styles from './FeedbackPanel.module.css';
 
 // ============================================================================
@@ -115,6 +115,7 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
           genre: currentProject.genre,
           writerProfile: getWriterProfile(),
           styleProfile: getStyleProfile(currentProject.id),
+          writingRules: getWritingRules(currentProject.id),
         }),
       });
 
