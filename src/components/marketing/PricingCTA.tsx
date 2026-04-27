@@ -14,7 +14,7 @@ export function PricingCTA() {
         The blank page is free. The studio that helps you fill it is ten dollars a month.
       </p>
       <Link
-        href="/studio"
+        href="/dashboard"
         className="inline-flex items-center bg-bark text-cream py-3.5 px-7 rounded-lg font-medium text-[15px] hover:opacity-95 transition-opacity"
       >
         Start writing →
