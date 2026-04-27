@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { MODELS } from '@/lib/ai-models';
+import { getCurrentTier, upgradeRequired } from '@/lib/userTier';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -81,28 +82,34 @@ Return a JSON object with this exact structure:
     "uniquePhrases": ["3-5 fresh, ownable turns of phrase from their writing"]
   },
   "techniques": {
-    "strengths": ["2-4 craft strengths — what they do well"],
+    "strengths": ["2-4 craft strengths, what they do well"],
     "tics": ["2-4 unconscious habits, e.g., 'over-uses dialogue tags', 'repeats sentence openers'"],
-    "filterWords": ["filter words or crutch words they default to — felt, saw, seemed, just, really, etc."]
+    "filterWords": ["filter words or crutch words they default to: felt, saw, seemed, just, really, etc."]
   },
   "prose": {
     "showVsTellBalance": "1 sentence on how they balance showing vs telling",
     "descriptionStyle": "1 sentence on sensory/descriptive approach",
     "dialogueStyle": "1 sentence on how dialogue lands"
   },
-  "influences": ["2-4 authors or styles this writing evokes — be specific, not generic"],
+  "influences": ["2-4 authors or styles this writing evokes, be specific, not generic"],
   "summary": "2 sentences: the distilled essence of this writer's voice, usable as a prompt directive"
 }
 
 Rules:
 - Be specific and grounded in the actual sample. Do NOT give generic writing advice.
 - Quote or paraphrase from the sample when choosing goToWords, cliches, and uniquePhrases.
-- For influences, pick authors whose work genuinely resembles this — don't default to the biggest names in the genre.
+- For influences, pick authors whose work genuinely resembles this. Don't default to the biggest names in the genre.
 - The "summary" field must be concrete enough that another AI could use it to mimic this voice.
 - Return ONLY valid JSON, no markdown wrapping.`;
 }
 
 export async function POST(request: NextRequest) {
+  if ((await getCurrentTier()) === 'free') {
+    return upgradeRequired(
+      'Voice fingerprint Style Profiler is an Author-plan feature.'
+    );
+  }
+
   try {
     let body: StyleProfileRequest;
     try {
