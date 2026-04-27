@@ -86,7 +86,7 @@ export default function Dashboard() {
     if (!file) return;
     e.target.value = ''; // reset so same file can be picked again later
     const ok = window.confirm(
-      'Restoring will REPLACE all your current ProseCraft data with the contents of this backup. This cannot be undone. Continue?'
+      'Restoring will REPLACE all your current SeedQuill data with the contents of this backup. This cannot be undone. Continue?'
     );
     if (!ok) return;
     try {
@@ -262,7 +262,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
             <PenTool className="w-5 h-5 text-[var(--color-accent)]" />
-            <h1 className="text-xl font-bold tracking-tight">ProseCraft</h1>
+            <h1 className="text-xl font-bold tracking-tight">SeedQuill</h1>
           </div>
           <ThemeToggle />
         </div>
@@ -294,7 +294,7 @@ export default function Dashboard() {
             <PenTool className="w-16 h-16 text-[var(--color-accent-light)] mb-6" strokeWidth={1.5} />
             <h2 className="text-3xl font-semibold mb-3 text-center">Start your next manuscript</h2>
             <p className="text-[var(--color-text-secondary)] mb-8 max-w-md text-center">
-              Create from scratch or import an existing manuscript. ProseCraft helps you organize,
+              Create from scratch or import an existing manuscript. SeedQuill helps you organize,
               develop, and refine your writing with AI-powered tools.
             </p>
             <div className="flex gap-3">
