@@ -2,6 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+
 type InlineAction =
   | 'improve'
   | 'show-dont-tell'
