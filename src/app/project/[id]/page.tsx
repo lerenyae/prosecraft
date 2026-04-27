@@ -192,7 +192,7 @@ function ToolStrip({
   ];
 
   return (
-    <div className="flex flex-col items-center w-12 bg-[var(--color-bg-secondary)] border-l border-[var(--color-border)] py-3 gap-1 flex-shrink-0">
+    <div className="flex flex-col items-center w-12 bg-[var(--color-bg-secondary)] border-l border-[var(--color-border)] py-3 gap-1 flex-shrink-0 relative z-40">
       {tools.map(tool => {
         const Icon = tool.icon;
         const isActive = activeTab === tool.id;
@@ -239,7 +239,9 @@ function RightPanel({
   if (!activeTab) return null;
 
   return (
-    <div className="flex-shrink-0 w-[320px] border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col overflow-hidden">
+    <div className="flex-shrink-0 border-l border-[var(--color-border)] bg-[var(--color-bg-secondary)] flex flex-col overflow-hidden
+                    absolute md:static inset-y-0 right-12 md:right-auto z-40
+                    w-[85vw] max-w-[340px] md:w-[320px] md:max-w-none shadow-xl md:shadow-none">
       {/* Panel Header */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--color-border)] flex-shrink-0">
         <span className="text-sm font-semibold text-[var(--color-text-primary)]">
@@ -785,7 +787,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               >
                 <Menu className="w-4 h-4" />
               </button>
-              <h1 className="text-sm font-semibold truncate max-w-[200px] text-[var(--color-text-secondary)]">
+              <h1 className="hidden sm:block text-sm font-semibold truncate max-w-[200px] text-[var(--color-text-secondary)]">
                 {currentProject.title}
               </h1>
             </div>
@@ -861,10 +863,23 @@ export default function ProjectPage({ params }: ProjectPageProps) {
       )}
 
       {/* Main Layout */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile backdrop — covers editor when any drawer is open on small screens */}
+        {!focusMode && (sidebarOpen || activePanel) && (
+          <div
+            className="md:hidden absolute inset-0 z-30 bg-black/50"
+            onClick={() => {
+              if (sidebarOpen) toggleSidebar();
+              if (activePanel) setActivePanel(null);
+            }}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Left Sidebar */}
         {sidebarOpen && !focusMode && (
-          <div className="flex-shrink-0 w-60 border-r border-[var(--color-border)] overflow-hidden">
+          <div className="flex-shrink-0 w-60 border-r border-[var(--color-border)] overflow-hidden
+                          absolute md:static inset-y-0 left-0 z-40 bg-[var(--color-bg-secondary)] shadow-xl md:shadow-none">
             <Sidebar />
           </div>
         )}
