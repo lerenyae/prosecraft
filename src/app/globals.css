@@ -22,23 +22,24 @@ html {
 }
 
 :root {
-  --color-bg-primary: #faf8f6;
-  --color-bg-secondary: #f5f3f0;
-  --color-surface: #fffef9;
-  --color-surface-alt: #f9f7f4;
-  --color-text-primary: #2a2622;
-  --color-text-secondary: #6b6560;
+  /* SeedQuill — these tokens drive the legacy /dashboard, /project, etc. */
+  --color-bg-primary: #faf7f0;
+  --color-bg-secondary: #f2ede1;
+  --color-surface: #faf7f0;
+  --color-surface-alt: #f2ede1;
+  --color-text-primary: #2a2419;
+  --color-text-secondary: #6b6357;
   --color-text-muted: #9d9590;
-  --color-border: #e8e5e0;
-  --color-border-light: #f0eee9;
-  --color-accent: #a89a8f;
-  --color-accent-light: #c9bfb4;
-  --color-accent-dark: #8b7d72;
-  --color-accent-on: #2a2622;
-  --color-accent-on-muted: #5a4f44;
+  --color-border: #e6dfce;
+  --color-border-light: #f2ede1;
+  --color-accent: #5d7a4a;
+  --color-accent-light: #eaf0e2;
+  --color-accent-dark: #44593a;
+  --color-accent-on: #44593a;
+  --color-accent-on-muted: #6b6357;
   --scrollbar-bg: transparent;
   --scrollbar-thumb: #d4cfc8;
-  --scrollbar-thumb-hover: #a89a8f;
+  --scrollbar-thumb-hover: #5d7a4a;
 }
 
 .dark {
@@ -51,8 +52,8 @@ html {
   --color-text-muted: #b5aba1;
   --color-border: #3d3835;
   --color-border-light: #2d2925;
-  --color-accent: #c9bfb4;
-  --color-accent-light: #a89a8f;
+  --color-accent: #5d7a4a;
+  --color-accent-light: #44593a;
   --color-accent-dark: #6b5f54;
   --color-accent-on: #1a1612;
   --color-accent-on-muted: #3d3530;
@@ -64,10 +65,15 @@ html {
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* SeedQuill type system — Fraunces for headings, Inter for body */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Fraunces', ui-serif, Georgia, serif;
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -89,17 +95,10 @@ body {
 }
 .studio-prose strong { font-weight: 600; }
 .studio-prose em { font-style: italic; }
-.studio-prose blockquote {
-  border-left: 2px solid var(--color-edge);
-  padding-left: 1em;
-  margin: 1em 0;
-  color: var(--color-muted);
-  font-style: italic;
-}
 
 /* TipTap editor — Book-ready formatting (legacy /project/[id] route) */
 .tiptap {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Fraunces', 'Georgia', serif;
   color: var(--color-text-primary);
   padding: 3rem 2.5rem;
   line-height: 1.8;
@@ -107,10 +106,9 @@ body {
   min-height: 100%;
   letter-spacing: 0.01em;
 }
-.tiptap:focus,
-.tiptap:focus-within { outline: none; }
+.tiptap:focus, .tiptap:focus-within { outline: none; }
 .tiptap h1, .tiptap h2, .tiptap h3, .tiptap h4 {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Fraunces', 'Georgia', serif;
   font-weight: 600;
   color: var(--color-text-primary);
   text-align: center;
@@ -123,14 +121,7 @@ body {
 .tiptap h3 { font-size: 1.125rem; font-style: italic; font-weight: 400; }
 .tiptap p { margin-bottom: 0; margin-top: 0; text-indent: 1.5em; }
 .tiptap h1 + p, .tiptap h2 + p, .tiptap h3 + p, .tiptap blockquote + p, .tiptap hr + p, .tiptap > p:first-child { text-indent: 0; }
-.tiptap blockquote {
-  border-left: 3px solid var(--color-accent);
-  padding-left: 1.5rem;
-  margin: 1.5rem 0 1.5rem 1rem;
-  color: var(--color-text-secondary);
-  font-style: italic;
-  text-indent: 0;
-}
+.tiptap blockquote { border-left: 3px solid var(--color-accent); padding-left: 1.5rem; margin: 1.5rem 0 1.5rem 1rem; color: var(--color-text-secondary); font-style: italic; text-indent: 0; }
 .tiptap blockquote p { text-indent: 0; }
 .tiptap ul, .tiptap ol { margin: 1rem 0 1rem 2rem; }
 .tiptap li { margin-bottom: 0.5rem; text-indent: 0; }
@@ -140,22 +131,8 @@ body {
 .tiptap em { font-style: italic; }
 .tiptap .scene-break { text-align: center; margin: 2rem 0; color: var(--color-text-muted); font-size: 0.875rem; letter-spacing: 0.5em; user-select: none; cursor: default; }
 .tiptap hr { border: none; text-align: center; margin: 2rem 0; }
-.tiptap p.is-editor-empty:first-child::before {
-  color: var(--color-text-muted);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-  text-indent: 0;
-  font-style: italic;
-}
-.writing-surface {
-  background-color: var(--color-surface);
-  color: var(--color-text-primary);
-  border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-}
+.tiptap p.is-editor-empty:first-child::before { color: var(--color-text-muted); content: attr(data-placeholder); float: left; height: 0; pointer-events: none; text-indent: 0; font-style: italic; }
+.writing-surface { background-color: var(--color-surface); color: var(--color-text-primary); border: 1px solid var(--color-border); border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07); }
 ::selection { background-color: var(--color-accent); color: var(--color-surface); }
 .selection-focus-mode .tiptap { color: var(--color-text-muted); transition: color 0.3s ease; }
 .selection-focus-mode .tiptap ::selection { background-color: var(--color-accent); color: var(--color-surface); }
