@@ -1,10 +1,13 @@
 import { Hero } from '@/components/marketing/Hero';
+import { Features } from '@/components/marketing/Features';
+import { ForWriters } from '@/components/marketing/ForWriters';
 
 export default function LandingPage() {
   return (
     <>
       <Hero />
-      {/* TODO: ProductPreview, CompareGrid, CTA — deferred per spec section 8 step 9 */}
+      <Features />
+      <ForWriters />
     </>
   );
 }
