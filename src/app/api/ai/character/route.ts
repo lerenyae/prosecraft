@@ -2,6 +2,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { MODELS } from '@/lib/ai-models';
 
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+
 interface GenerateRequest {
   action: 'generate';
   prompt: string;
