@@ -11,7 +11,11 @@ export type PricingCardProps = {
   monthlyPrice: number;
   yearlyPrice: number; // total per year
   billing: Billing;
-  cta: { label: string; href: string };
+  cta: {
+    label: string;
+    href: string;
+    onClick?: (e: React.MouseEvent<HTMLAnchorElement>) => void;
+  };
   ctaVariant: 'primary' | 'secondary';
   features: string[];
   featured?: boolean;
@@ -44,7 +48,7 @@ export function PricingCard({
   const subline = isFree
     ? null
     : billing === 'yearly'
-    ? `$${yearlyPrice} billed yearly · save $${monthlyPrice * 12 - yearlyPrice}`
+    ? `$${yearlyPrice} billed yearly \u00b7 save $${monthlyPrice * 12 - yearlyPrice}`
     : 'billed monthly';
 
   return (
@@ -68,39 +72,83 @@ export function PricingCard({
       )}
 
       <h3 className="font-display text-[22px] font-semibold mb-1.5">{name}</h3>
-      <p className={cn('text-[14px] mb-7', featured ? 'text-cream/70' : 'text-muted')}>{tagline}</p>
+      <p
+        className={cn(
+          'text-[14px] mb-7',
+          featured ? 'text-cream/70' : 'text-muted'
+        )}
+      >
+        {tagline}
+      </p>
 
       <div className="mb-6">
         <div className="flex items-baseline gap-2">
-          <span className="font-display font-medium leading-none tracking-[-2px]" style={{ fontSize: 56 }}>${bigPrice}</span>
-          <span className={cn('text-[14px]', featured ? 'text-cream/70' : 'text-muted')}>{forever ? '/ forever' : '/ month'}</span>
+          <span
+            className="font-display font-medium leading-none tracking-[-2px]"
+            style={{ fontSize: 56 }}
+          >
+            ${bigPrice}
+          </span>
+          <span
+            className={cn(
+              'text-[14px]',
+              featured ? 'text-cream/70' : 'text-muted'
+            )}
+          >
+            {forever ? '/ forever' : '/ month'}
+          </span>
         </div>
         {subline && (
-          <p className={cn('mt-1.5 text-[13px]', featured ? 'text-cream/70' : 'text-muted')}>{subline}</p>
+          <p
+            className={cn(
+              'mt-1.5 text-[13px]',
+              featured ? 'text-cream/70' : 'text-muted'
+            )}
+          >
+            {subline}
+          </p>
         )}
       </div>
 
       <Link
         href={cta.href}
+        onClick={cta.onClick}
         className={cn(
           'block w-full text-center rounded-lg py-3.5 font-medium text-[15px] transition-opacity hover:opacity-95',
           ctaVariant === 'primary'
-            ? featured ? 'bg-cream text-bark' : 'bg-bark text-cream'
+            ? featured
+              ? 'bg-cream text-bark'
+              : 'bg-bark text-cream'
             : 'bg-cream text-bark border border-edge hover:bg-cream-2 transition-colors'
         )}
       >
         {cta.label}
       </Link>
 
-      <hr className={cn('my-6 border-0 border-t', featured ? 'border-cream/15' : 'border-edge')} />
+      <hr
+        className={cn(
+          'my-6 border-0 border-t',
+          featured ? 'border-cream/15' : 'border-edge'
+        )}
+      />
 
       <ul className="space-y-3.5">
         {features.map((f, i) => (
           <li key={i} className="flex items-start gap-2.5 text-[14px] leading-snug">
-            <Check size={15} className={cn('mt-0.5 shrink-0', featured ? 'text-sage' : 'text-sage')} />
+            <Check
+              size={15}
+              className={cn(
+                'mt-0.5 shrink-0',
+                featured ? 'text-sage' : 'text-sage'
+              )}
+            />
             <span
-              className={cn(featured ? 'text-cream/90' : 'text-bark')}
-              dangerouslySetInnerHTML={{ __html: boldifyMarkdown(f) }}
+              className={cn(
+                featured ? 'text-cream/90' : 'text-bark'
+              )}
+              dangerouslySetInnerHTML={{
+                __html: boldifyMarkdown(f),
+              }}
             />
           </li>
         ))}
