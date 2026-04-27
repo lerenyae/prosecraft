@@ -3,7 +3,8 @@
 import { useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { Plus, Calendar, PenTool, Upload, Trash2 } from 'lucide-react';
+import { Plus, Calendar, PenTool, Upload, Trash2, Download, RotateCcw } from 'lucide-react';
+import { downloadBackup, restoreBackup } from '@/lib/backup';
 
 // Calculate word count for a specific project by reading chapters/scenes from localStorage
 function getProjectWordCount(projectId: string): number {
@@ -53,6 +54,9 @@ export default function Dashboard() {
   const [importFileName, setImportFileName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupNote, setBackupNote] = useState<string | null>(null);
 
   // Calculate word counts for all projects
   const wordCounts = useMemo(() => {
@@ -63,6 +67,40 @@ export default function Dashboard() {
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects]);
+
+  const handleBackup = () => {
+    try {
+      setBackupBusy(true);
+      const { keysExported, filename } = downloadBackup();
+      setBackupNote(`Saved ${filename} (${keysExported} keys).`);
+    } catch (err) {
+      setBackupNote(err instanceof Error ? `Backup failed: ${err.message}` : 'Backup failed.');
+    } finally {
+      setBackupBusy(false);
+      setTimeout(() => setBackupNote(null), 4000);
+    }
+  };
+
+  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = ''; // reset so same file can be picked again later
+    const ok = window.confirm(
+      'Restoring will REPLACE all your current ProseCraft data with the contents of this backup. This cannot be undone. Continue?'
+    );
+    if (!ok) return;
+    try {
+      setBackupBusy(true);
+      const { keysRestored, exportedAt } = await restoreBackup(file);
+      const when = exportedAt ? ` (backup from ${new Date(exportedAt).toLocaleString()})` : '';
+      setBackupNote(`Restored ${keysRestored} keys${when}. Reloading…`);
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      setBackupNote(err instanceof Error ? `Restore failed: ${err.message}` : 'Restore failed.');
+      setBackupBusy(false);
+      setTimeout(() => setBackupNote(null), 5000);
+    }
+  };
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,6 +268,24 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Hidden file input for backup restore (used by both empty + populated states) */}
+      <input
+        ref={restoreInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        onChange={handleRestoreFile}
+      />
+
+      {/* Backup/Restore status toast */}
+      {backupNote && (
+        <div className="max-w-7xl mx-auto px-6 pt-4">
+          <div className="text-xs px-3 py-2 rounded-md bg-[var(--color-surface-alt)] border border-[var(--color-border)] text-[var(--color-text-secondary)]">
+            {backupNote}
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-12">
         {projects.length === 0 ? (
@@ -256,6 +312,14 @@ export default function Dashboard() {
                 <Upload className="w-5 h-5" />
                 Import Manuscript
               </button>
+              <button
+                onClick={() => restoreInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors"
+                title="Restore from a previously downloaded backup"
+              >
+                <RotateCcw className="w-5 h-5" />
+                Restore Backup
+              </button>
             </div>
           </div>
         ) : (
@@ -268,7 +332,25 @@ export default function Dashboard() {
                   {projects.length} {projects.length === 1 ? 'project' : 'projects'}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
+                <button
+                  onClick={handleBackup}
+                  disabled={backupBusy}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm disabled:opacity-50"
+                  title="Download a JSON backup of all your projects, chapters, and settings"
+                >
+                  <Download className="w-4 h-4" />
+                  Backup
+                </button>
+                <button
+                  onClick={() => restoreInputRef.current?.click()}
+                  disabled={backupBusy}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm disabled:opacity-50"
+                  title="Restore from a previously downloaded backup"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Restore
+                </button>
                 <button
                   onClick={() => setShowImportModal(true)}
                   className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm"
@@ -536,7 +618,7 @@ export default function Dashboard() {
                 onClick={handleImport}
                 disabled={!title.trim() || !importText.trim()}
                 className="flex-1 px-4 py-2 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-              >
+                >
                 Import
               </button>
             </div>
