@@ -37,7 +37,7 @@ export function PricingTiers({ billing }: { billing: Billing }) {
           yearlyPrice={PRICING.seedling.yearly}
           billing={billing}
           forever
-          cta={{ label: 'Start writing →', href: '/studio' }}
+          cta={{ label: 'Start writing →', href: '/dashboard' }}
           ctaVariant="secondary"
           features={SEEDLING_FEATURES}
         />
@@ -47,7 +47,7 @@ export function PricingTiers({ billing }: { billing: Billing }) {
           monthlyPrice={PRICING.author.monthly}
           yearlyPrice={PRICING.author.yearly}
           billing={billing}
-          cta={{ label: 'Begin your manuscript →', href: '/studio' }}
+          cta={{ label: 'Begin your manuscript →', href: '/dashboard' }}
           ctaVariant="primary"
           features={AUTHOR_FEATURES}
           featured
