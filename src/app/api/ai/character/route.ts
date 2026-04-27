@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest, NextResponse } from 'next/server';
 import { MODELS } from '@/lib/ai-models';
+import { getCurrentTier, upgradeRequired } from '@/lib/userTier';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -42,6 +43,12 @@ function getGenreContext(genre?: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  if ((await getCurrentTier()) === 'free') {
+    return upgradeRequired(
+      'AI character generation is an Author-plan feature.'
+    );
+  }
+
   try {
     const body = (await request.json()) as CharacterRequest;
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
