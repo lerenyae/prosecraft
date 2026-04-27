@@ -1,5 +1,7 @@
 'use client';
 
+import { useUser } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 import { PricingCard } from './PricingCard';
 import { PRICING, type Billing } from '@/lib/pricing';
 
@@ -26,7 +28,37 @@ const AUTHOR_FEATURES = [
   'Priority support',
 ];
 
+const MONTHLY_LINK = process.env.NEXT_PUBLIC_STRIPE_AUTHOR_MONTHLY_LINK ?? '';
+const YEARLY_LINK = process.env.NEXT_PUBLIC_STRIPE_AUTHOR_YEARLY_LINK ?? '';
+
+function buildCheckoutUrl(base: string, userId: string | null): string {
+  if (!base) return '/sign-up';
+  if (!userId) return '/sign-up?after_sign_up_url=/pricing';
+  const sep = base.includes('?') ? '&' : '?';
+  return `${base}${sep}client_reference_id=${encodeURIComponent(userId)}`;
+}
+
 export function PricingTiers({ billing }: { billing: Billing }) {
+  const { user, isLoaded } = useUser();
+  const router = useRouter();
+  const userId = isLoaded && user ? user.id : null;
+
+  const authorHref =
+    billing === 'yearly'
+      ? buildCheckoutUrl(YEARLY_LINK, userId)
+      : buildCheckoutUrl(MONTHLY_LINK, userId);
+
+  const handleAuthorClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (!isLoaded) {
+      e.preventDefault();
+      return;
+    }
+    if (!user) {
+      e.preventDefault();
+      router.push('/sign-up?after_sign_up_url=/pricing');
+    }
+  };
+
   return (
     <section className="max-w-[900px] mx-auto py-[60px] px-14">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -37,7 +69,7 @@ export function PricingTiers({ billing }: { billing: Billing }) {
           yearlyPrice={PRICING.seedling.yearly}
           billing={billing}
           forever
-          cta={{ label: 'Start writing →', href: '/dashboard' }}
+          cta={{ label: 'Start writing \u2192', href: '/dashboard' }}
           ctaVariant="secondary"
           features={SEEDLING_FEATURES}
         />
@@ -47,7 +79,11 @@ export function PricingTiers({ billing }: { billing: Billing }) {
           monthlyPrice={PRICING.author.monthly}
           yearlyPrice={PRICING.author.yearly}
           billing={billing}
-          cta={{ label: 'Begin your manuscript →', href: '/dashboard' }}
+          cta={{
+            label: 'Begin your manuscript \u2192',
+            href: authorHref,
+            onClick: handleAuthorClick,
+          }}
           ctaVariant="primary"
           features={AUTHOR_FEATURES}
           featured
