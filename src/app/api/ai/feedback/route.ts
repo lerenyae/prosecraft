@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 import { runAIRequest, parseAIJson, AIRequestError } from '@/lib/ai-request';
+import { getCurrentTier, upgradeRequired } from '@/lib/userTier';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -120,6 +121,12 @@ function buildUserPrompt(
 }
 
 export async function POST(request: NextRequest) {
+  if ((await getCurrentTier()) === 'free') {
+    return upgradeRequired(
+      'Beta Reader chapter feedback is an Author-plan feature.'
+    );
+  }
+
   let body: FeedbackRequest;
   try {
     body = (await request.json()) as FeedbackRequest;
