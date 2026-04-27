@@ -1,9 +1,9 @@
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Changelog \u2014 SeedQuill',
+  title: 'Changelog \u00b7 SeedQuill',
   description:
-    'Release notes for SeedQuill \u2014 what we ship, when we ship it, and why it matters for writers.',
+    'Release notes for SeedQuill. What we ship, when we ship it, and why it matters for writers.',
 };
 
 type Entry = {
@@ -19,7 +19,7 @@ const ENTRIES: Entry[] = [
     version: 'v1.0',
     title: 'SeedQuill is live',
     highlights: [
-      'Brand re-launch from ProseCraft \u2192 SeedQuill \u2014 new voice, new identity, same studio.',
+      'Brand re-launch from ProseCraft to SeedQuill. New voice, new identity, same studio.',
       'Full email + Google sign-in with secure session management.',
       'Custom domain seedquill.com with end-to-end SSL.',
       'Pricing page with monthly and annual plans.',
@@ -30,7 +30,7 @@ const ENTRIES: Entry[] = [
     version: 'v0.9',
     title: 'Mobile drawer + writing studio polish',
     highlights: [
-      'Mobile-responsive layout for the studio \u2014 drawer navigation at 390px and below.',
+      'Mobile-responsive layout for the studio with drawer navigation at 390px and below.',
       'Editor toolbar reflows on small screens.',
       'Per-chapter notes field for tracking ideas without leaving the manuscript.',
       'PDF export now respects per-chapter page breaks.',
@@ -41,7 +41,7 @@ const ENTRIES: Entry[] = [
     version: 'v0.8',
     title: 'AI editor: deeper, faster, more honest',
     highlights: [
-      'Whole-Book chat with streaming responses \u2014 the AI now reads across chapters.',
+      'Whole-Book chat with streaming responses. The AI now reads across chapters.',
       'Click-to-highlight in Quick Scan suggestions.',
       'Bulk-accept change summary so you always know what shifted.',
       'Wired Opus for deep analysis on long passages; Haiku for in-line suggestions.',
