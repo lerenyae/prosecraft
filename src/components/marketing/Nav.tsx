@@ -11,13 +11,18 @@ export async function Nav() {
       <Logo />
       <ul className="flex gap-8 list-none text-sm text-muted font-medium">
         <li>
-          <Link href="#product" className="text-muted hover:text-bark transition-colors">
+          <Link href="/#product" className="text-muted hover:text-bark transition-colors">
             Product
           </Link>
         </li>
         <li>
-          <Link href="#writers" className="text-muted hover:text-bark transition-colors">
+          <Link href="/#writers" className="text-muted hover:text-bark transition-colors">
             For writers
+          </Link>
+        </li>
+        <li>
+          <Link href="/about" className="text-muted hover:text-bark transition-colors">
+            About
           </Link>
         </li>
         <li>
