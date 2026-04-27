@@ -73,7 +73,7 @@ export async function restoreBackup(file: File): Promise<RestoreResult> {
   }
   const bundle = parsed as Partial<BackupBundle>;
   if (!bundle || bundle.appName !== 'prosecraft') {
-    throw new Error('Not a ProseCraft backup file.');
+    throw new Error('Not a SeedQuill backup file.');
   }
   if (!bundle.data || typeof bundle.data !== 'object') {
     throw new Error('Backup file is missing data.');
