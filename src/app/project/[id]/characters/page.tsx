@@ -309,6 +309,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [relationships, setRelationships] = useState<CharacterRelationship[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [listOpen, setListOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ProfileTab>('bio');
   const [searchQuery, setSearchQuery] = useState('');
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
@@ -509,9 +510,28 @@ export default function CharactersPage({ params }: CharacterPageProps) {
         <ThemeToggle />
       </header>
 
-      <div className="flex h-[calc(100vh-3.5rem)]">
+      <div className="flex h-[calc(100vh-3.5rem)] relative">
+        {/* Mobile backdrop */}
+        {listOpen && (
+          <div
+            className="md:hidden absolute inset-0 z-30 bg-black/50"
+            onClick={() => setListOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Mobile character-list toggle (floating) */}
+        <button
+          onClick={() => setListOpen(true)}
+          className="md:hidden absolute top-3 left-3 z-20 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm"
+        >
+          Characters
+        </button>
+
         {/* Left: Character List */}
-        <div className="w-72 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col">
+        <div className={`w-72 border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 flex flex-col
+                         absolute md:static inset-y-0 left-0 z-40 shadow-xl md:shadow-none
+                         ${listOpen ? 'block' : 'hidden md:flex'}`}>
           {/* Search */}
           <div className="p-3 border-b border-gray-200 dark:border-gray-800">
             <div className="relative">
@@ -532,7 +552,7 @@ export default function CharactersPage({ params }: CharacterPageProps) {
                 key={char.id}
                 character={char}
                 isSelected={char.id === selectedId}
-                onClick={() => { setSelectedId(char.id); setActiveTab('bio'); }}
+                onClick={() => { setSelectedId(char.id); setActiveTab('bio'); setListOpen(false); }}
               />
             ))}
             {characters.length === 0 && (
