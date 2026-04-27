@@ -129,7 +129,7 @@ export default function OnboardingModal({
 
   const steps = [
     {
-      title: 'Welcome to ProseCraft',
+      title: 'Welcome to SeedQuill',
       subtitle: 'Four quick questions so the AI tailors its feedback to you.',
       body: (
         <div className="space-y-2">
