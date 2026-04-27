@@ -557,7 +557,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
           : undefined;
 
         const doc = new Document({
-          creator: 'ProseCraft',
+          creator: 'SeedQuill',
           title: currentProject.title,
           styles: {
             default: {
@@ -776,7 +776,7 @@ export default function ProjectPage({ params }: ProjectPageProps) {
               >
                 <PenTool className="w-4 h-4 text-[var(--color-accent)]" />
                 <span className="text-sm font-bold text-[var(--color-text-primary)] group-hover:text-[var(--color-accent)] transition-colors">
-                  ProseCraft
+                  SeedQuill
                 </span>
               </Link>
               <div className="w-px h-5 bg-[var(--color-border)] mx-1" />
