@@ -21,7 +21,7 @@ export function Hero() {
 
       <div className="flex gap-3 justify-center mb-[60px]">
         <Link
-          href="/studio"
+          href="/dashboard"
           className="bg-bark text-cream py-3.5 px-7 rounded-lg font-medium text-[15px] hover:opacity-95 transition-opacity"
         >
           Start your manuscript
