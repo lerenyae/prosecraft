@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getWriterProfile, getStyleProfile, getWritingRules } from '@/lib/personalization';
+import { aiFetch, isUpgradeError, isQuotaError, UpgradeRequiredError, QuotaExceededError } from '@/lib/aiFetch';
+import UpgradePrompt from './UpgradePrompt';
 import styles from './FeedbackPanel.module.css';
 
 // ============================================================================
@@ -67,6 +69,7 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeError, setUpgradeError] = useState<UpgradeRequiredError | QuotaExceededError | null>(null);
   const [expanded, setExpanded] = useState<ExpandedSections>({
     pacing: true,
     tension: true,
@@ -92,23 +95,15 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
 
     setIsLoading(true);
     setError(null);
+    setUpgradeError(null);
     setFeedback(null);
 
     try {
-      // Get all scenes for this chapter
       const scenes = chapterScenes(currentChapter.id);
+      const chapterContent = scenes.map((scene) => scene.content).join('\n\n');
 
-      // Concatenate all scene content as HTML
-      const chapterContent = scenes
-        .map((scene) => scene.content)
-        .join('\n\n');
-
-      // Call the API
-      const response = await fetch('/api/ai/feedback', {
+      const data = await aiFetch<FeedbackResponse>('/api/ai/feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           chapterTitle: currentChapter.title,
           chapterContent,
@@ -119,16 +114,13 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      const data = await response.json();
       setFeedback(data);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to fetch feedback'
-      );
+      if (isUpgradeError(err) || isQuotaError(err)) {
+        setUpgradeError(err);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to fetch feedback');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +145,19 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
 
         {/* Content */}
         <div className={styles.content}>
-          {!feedback && !isLoading && !error && (
+          {upgradeError && !isLoading && (
+            <div style={{ padding: '16px' }}>
+              <UpgradePrompt
+                variant={upgradeError instanceof QuotaExceededError ? 'quota' : 'locked'}
+                reason={upgradeError.reason}
+                upgradeUrl={upgradeError.upgradeUrl}
+                resetAt={upgradeError instanceof QuotaExceededError ? upgradeError.resetAt : undefined}
+                feature="Chapter Feedback"
+              />
+            </div>
+          )}
+
+          {!feedback && !isLoading && !error && !upgradeError && (
             <div className={styles.empty}>
               <p className={styles.emptyText}>
                 Ready for AI feedback on your chapter?
@@ -328,71 +332,71 @@ export const FeedbackPanel = ({ isOpen, onClose }: FeedbackPanelProps) => {
                           <blockquote className={styles.quote}>
                             "{violation.quote}"
                           </blockquote>
-                          <div className={styles.suggestion}>
-                            <p className={styles.suggestionLabel}>
-                              Suggestion:
-                            </p>
-                            <p>{violation.suggestion}</p>
-                          </div>
+                        <div className={styles.suggestion}>
+                          <p className={styles.suggestionLabel}>
+                            Suggestion:
+                          </p>
+                          <p>{violation.suggestion}</p>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Section>
-
-              {/* Strengths Section */}
-              <Section
-                title="Strengths"
-                icon={Star}
-                isExpanded={expanded.strengths}
-                onToggle={() => toggleSection('strengths')}
-              >
-                <div className={styles.sectionContent}>
-                  <ul className={styles.strengthsList}>
-                    {feedback.strengths.map((strength, idx) => (
-                      <li key={idx} className={styles.strengthItem}>
-                        {strength}
-                      </li>
+                      </div>
                     ))}
-                  </ul>
-                </div>
-              </Section>
+                  </div>
+                )}
+              </div>
+            </Section>
 
-              {/* Priorities Section */}
-              <Section
-                title="Priorities"
-                icon={AlertTriangle}
-                isExpanded={expanded.priorities}
-                onToggle={() => toggleSection('priorities')}
-              >
-                <div className={styles.sectionContent}>
-                  <ol className={styles.prioritiesList}>
-                    {feedback.priorities.map((priority, idx) => (
-                      <li key={idx} className={styles.priorityItem}>
-                        {priority}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              </Section>
-            </div>
-          )}
-        </div>
-
-        {feedback && (
-          <div className={styles.footer}>
-            <button
-              onClick={fetchFeedback}
-              className={styles.refreshButton}
-              disabled={isLoading}
+            {/* Strengths Section */}
+            <Section
+              title="Strengths"
+              icon={Star}
+              isExpanded={expanded.strengths}
+              onToggle={() => toggleSection('strengths')}
             >
-              Refresh Feedback
-            </button>
+              <div className={styles.sectionContent}>
+                <ul className={styles.strengthsList}>
+                  {feedback.strengths.map((strength, idx) => (
+                    <li key={idx} className={styles.strengthItem}>
+                      {strength}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Section>
+
+            {/* Priorities Section */}
+            <Section
+              title="Priorities"
+              icon={AlertTriangle}
+              isExpanded={expanded.priorities}
+              onToggle={() => toggleSection('priorities')}
+            >
+              <div className={styles.sectionContent}>
+                <ol className={styles.prioritiesList}>
+                  {feedback.priorities.map((priority, idx) => (
+                    <li key={idx} className={styles.priorityItem}>
+                      {priority}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </Section>
           </div>
         )}
       </div>
+
+      {feedback && (
+        <div className={styles.footer}>
+          <button
+            onClick={fetchFeedback}
+            className={styles.refreshButton}
+            disabled={isLoading}
+          >
+            Refresh Feedback
+          </button>
+        </div>
+      )}
     </div>
+  </div>
   );
 };
 
@@ -460,5 +464,5 @@ export const FeedbackTrigger = ({
       <Zap size={18} />
       <span>Get Feedback</span>
     </button>
-  );
+    );
 };
