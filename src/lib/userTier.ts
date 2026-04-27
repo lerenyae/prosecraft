@@ -11,7 +11,7 @@ export type Tier = 'free' | 'pro';
 export type TierMetadata = {
   tier?: Tier;
   stripeCustomerId?: string;
-  proSince?: string; // ISO date
+  proSince?: string;
 };
 
 /**
@@ -26,7 +26,7 @@ export async function getCurrentTier(): Promise<Tier> {
 }
 
 /**
- * Read tier for any user by ID. Use sparingly - hits Clerk API.
+ * Read tier for any user by ID. Use sparingly, hits Clerk API.
  */
 export async function getTierByUserId(userId: string): Promise<Tier> {
   const client = await clerkClient();
@@ -40,3 +40,27 @@ export async function getTierByUserId(userId: string): Promise<Tier> {
  * Pro = unlimited.
  */
 export const FREE_DAILY_AI_LIMIT = 10;
+
+/**
+ * Free tier word-count ceiling per manuscript.
+ * Pro = unlimited.
+ */
+export const FREE_MANUSCRIPT_WORD_CAP = 30000;
+
+/**
+ * Helper response for routes that should reject free users.
+ * Use in API handlers: if ((await getCurrentTier()) === 'free') return upgradeRequired();
+ */
+export function upgradeRequired(reason: string = 'This feature requires the Author plan.') {
+  return new Response(
+    JSON.stringify({
+      error: 'upgrade_required',
+      reason,
+      upgradeUrl: '/pricing',
+    }),
+    {
+      status: 402,
+      headers: { 'content-type': 'application/json' },
+    }
+  );
+}
