@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '@/lib/store';
 import { getWriterProfile, getStyleProfile, getWritingRules } from '@/lib/personalization';
+import { aiFetch, isUpgradeError, isQuotaError, UpgradeRequiredError, QuotaExceededError } from '@/lib/aiFetch';
+import UpgradePrompt from './UpgradePrompt';
 
 // ============================================================================
 // Types
@@ -84,6 +86,7 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [selectionResult, setSelectionResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeError, setUpgradeError] = useState<UpgradeRequiredError | QuotaExceededError | null>(null);
   const [expandedTypes, setExpandedTypes] = useState<Record<string, boolean>>({});
 
   const analyzeChapter = useCallback(async () => {
@@ -94,6 +97,7 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
 
     setIsLoading(true);
     setError(null);
+    setUpgradeError(null);
     setSelectionResult(null);
 
     try {
@@ -101,14 +105,13 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
       const content = scenes.map(s => s.content).join('\n\n');
 
       if (!content.trim()) {
-        setError('Chapter is empty — write something first');
+        setError('Chapter is empty. Write something first.');
         setIsLoading(false);
         return;
       }
 
-      const response = await fetch('/api/ai/analyze', {
+      const data = await aiFetch<AnalysisResult>('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'chapter',
           chapterTitle: currentChapter.title,
@@ -120,12 +123,6 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
         }),
       });
 
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => null);
-        throw new Error(errBody?.error || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
       setResult(data);
 
       // Auto-expand all types
@@ -133,7 +130,11 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
       (data.annotations || []).forEach((a: Annotation) => { types[a.type] = true; });
       setExpandedTypes(types);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
+      if (isUpgradeError(err) || isQuotaError(err)) {
+        setUpgradeError(err);
+      } else {
+        setError(err instanceof Error ? err.message : 'Analysis failed');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -144,11 +145,12 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
 
     setIsSelectionLoading(true);
     setSelectionResult(null);
+    setError(null);
+    setUpgradeError(null);
 
     try {
-      const response = await fetch('/api/ai/analyze', {
+      const data = await aiFetch<AnalysisResult>('/api/ai/analyze', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           mode: 'selection',
           selectedText,
@@ -158,16 +160,13 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
           writingRules: getWritingRules(currentProject.id),
         }),
       });
-
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => null);
-        throw new Error(errBody?.error || `API error: ${response.status}`);
-      }
-
-      const data = await response.json();
       setSelectionResult(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
+      if (isUpgradeError(err) || isQuotaError(err)) {
+        setUpgradeError(err);
+      } else {
+        setError(err instanceof Error ? err.message : 'Analysis failed');
+      }
     } finally {
       setIsSelectionLoading(false);
     }
@@ -235,8 +234,19 @@ export default function BetaReaderPanel({ selectedText, onAnnotationClick }: Bet
 
       {/* Main Content */}
       <div className="p-4">
+        {/* Upgrade Prompt (free-tier gate) */}
+        {upgradeError && !isLoading && (
+          <UpgradePrompt
+            variant={upgradeError instanceof QuotaExceededError ? 'quota' : 'locked'}
+            reason={upgradeError.reason}
+            upgradeUrl={upgradeError.upgradeUrl}
+            resetAt={upgradeError instanceof QuotaExceededError ? upgradeError.resetAt : undefined}
+            feature="Beta Reader"
+          />
+        )}
+
         {/* Empty State */}
-        {!result && !isLoading && !error && (
+        {!result && !isLoading && !error && !upgradeError && (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <div className="w-14 h-14 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center mb-4">
               <Brain size={24} className="text-[var(--color-accent)]" />
