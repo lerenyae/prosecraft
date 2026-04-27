@@ -32,7 +32,7 @@ export function Nav() {
           Sign in
         </Link>
         <Link
-          href="/studio"
+          href="/dashboard"
           className="bg-bark text-cream py-[9px] px-[18px] rounded-md text-sm font-medium hover:opacity-95 transition-opacity"
         >
           Start free
