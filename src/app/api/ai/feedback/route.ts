@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 import { runAIRequest, parseAIJson, AIRequestError } from '@/lib/ai-request';
 
+export const maxDuration = 60;
+export const runtime = 'nodejs';
+
 interface FeedbackRequest {
   chapterTitle: string;
   chapterContent: string;
