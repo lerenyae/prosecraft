@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { buildPersonalizationPrompt, type WriterProfile, type StyleProfile } from '@/lib/personalization';
 import { runAIRequest, parseAIJson, AIRequestError } from '@/lib/ai-request';
+import { getCurrentTier, upgradeRequired } from '@/lib/userTier';
 
 export const maxDuration = 60;
 export const runtime = 'nodejs';
@@ -39,7 +40,7 @@ function getChapterPrompt(genre?: string): string {
   const g = genre ? `a ${genre} manuscript` : 'a manuscript';
   return `You are a sharp, experienced beta reader analyzing a chapter of ${g}.
 
-You read like a trusted friend who also happens to be a professional editor — honest, specific, and constructive.
+You read like a trusted friend who also happens to be a professional editor: honest, specific, and constructive.
 
 Analyze the chapter and return annotations in this exact JSON format:
 
@@ -49,8 +50,8 @@ Analyze the chapter and return annotations in this exact JSON format:
       "type": "show-dont-tell" | "pacing" | "dialogue" | "pov" | "tension" | "prose" | "structure",
       "severity": "praise" | "suggestion" | "warning",
       "quote": "exact short quote from the text (max 80 chars)",
-      "note": "your editorial observation — be specific and actionable",
-      "suggestion": "ONLY the replacement text itself — a direct rewrite the writer can copy-paste into their manuscript. No labels, no 'Consider:', no explanation. Just the new prose."
+      "note": "your editorial observation, be specific and actionable",
+      "suggestion": "ONLY the replacement text itself, a direct rewrite the writer can copy-paste into their manuscript. No labels, no 'Consider:', no explanation. Just the new prose."
     }
   ],
   "summary": {
@@ -62,7 +63,7 @@ Analyze the chapter and return annotations in this exact JSON format:
 
 Rules:
 - Return 5-12 annotations depending on chapter length
-- Mix praise with suggestions — always acknowledge what works
+- Mix praise with suggestions, always acknowledge what works
 - Quote the EXACT text when flagging issues (short quotes, max 80 chars)
 - Be specific: "this dialogue tag slows the beat" not "dialogue could be improved"
 - For show-dont-tell: flag emotional telling ("she felt angry") and suggest showing
@@ -72,7 +73,7 @@ Rules:
 - For prose: flag overwriting, cliches, filter words, passive voice
 - For structure: flag scene transitions, chapter arc, opening/closing strength
 - Severity "praise" = something that works well, "suggestion" = could be better, "warning" = needs attention
-- For suggestions and warnings, include a "suggestion" field with ONLY the replacement prose — no labels like "Consider:", no explanations, just the rewrite ready to paste
+- For suggestions and warnings, include a "suggestion" field with ONLY the replacement prose. No labels like "Consider:", no explanations, just the rewrite ready to paste
 - For praise, omit the "suggestion" field
 - Return ONLY valid JSON, no markdown wrapping`;
 }
@@ -91,8 +92,8 @@ Analyze the selected passage and return feedback in this exact JSON format:
       "type": "show-dont-tell" | "pacing" | "dialogue" | "pov" | "tension" | "prose" | "structure",
       "severity": "praise" | "suggestion" | "warning",
       "quote": "exact short quote from the selection (max 80 chars)",
-      "note": "your editorial observation — specific and actionable",
-      "suggestion": "ONLY the replacement text — a direct rewrite ready to copy-paste. No labels, no explanation. Just the new prose."
+      "note": "your editorial observation, specific and actionable",
+      "suggestion": "ONLY the replacement text, a direct rewrite ready to copy-paste. No labels, no explanation. Just the new prose."
     }
   ],
   "summary": {
@@ -104,13 +105,19 @@ Analyze the selected passage and return feedback in this exact JSON format:
 
 Rules:
 - Return 2-5 annotations for the selection
-- Be specific to the actual text — don't give generic writing advice
+- Be specific to the actual text, don't give generic writing advice
 - Always include at least one "praise" annotation
 - Quote from the selected text, not surrounding context
 - Return ONLY valid JSON, no markdown wrapping`;
 }
 
 export async function POST(request: NextRequest) {
+  if ((await getCurrentTier()) === 'free') {
+    return upgradeRequired(
+      'Deep chapter analysis (Beta Reader / Story Intelligence) is an Author-plan feature.'
+    );
+  }
+
   let body: AnalyzeRequest;
   try {
     body = (await request.json()) as AnalyzeRequest;
