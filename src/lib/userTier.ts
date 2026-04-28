@@ -3,6 +3,12 @@
  *
  * Source of truth: Clerk publicMetadata.tier on the user object.
  * Set on successful Stripe checkout via /api/stripe/webhook.
+ *
+ * Founder/owner accounts can be granted permanent Pro via the
+ * OWNER_EMAILS env var (comma-separated). On first server-side
+ * tier read, owner accounts are promoted to Pro and the metadata
+ * is persisted so all subsequent calls (including client-side
+ * reads of publicMetadata.tier) reflect Pro.
  */
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
@@ -12,17 +18,87 @@ export type TierMetadata = {
   tier?: Tier;
   stripeCustomerId?: string;
   proSince?: string; // ISO date
+  ownerOverride?: boolean;
 };
+
+/**
+ * Owner allowlist parsed from the OWNER_EMAILS env var.
+ * Format: comma-separated, e.g. "founder@example.com,co@example.com"
+ */
+function getOwnerEmails(): string[] {
+  return (process.env.OWNER_EMAILS || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function isOwnerEmail(email: string | undefined | null): boolean {
+  if (!email) return false;
+  return getOwnerEmails().includes(email.toLowerCase());
+}
+
+/**
+ * If the authenticated user has an owner email but their metadata
+ * isn't yet flipped to Pro, promote them now and persist it. Idempotent —
+ * safe to call from any server entry point (welcome, dashboard, AI routes).
+ *
+ * Returns the post-check tier.
+ */
+export async function ensureOwnerPromotion(userId: string): Promise<Tier> {
+  const owners = getOwnerEmails();
+  if (owners.length === 0) return 'free';
+
+  try {
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
+    const meta = (user.publicMetadata ?? {}) as TierMetadata;
+
+    // Already Pro — nothing to do.
+    if (meta.tier === 'pro') return 'pro';
+
+    const email = user.primaryEmailAddress?.emailAddress?.toLowerCase();
+    if (!email || !owners.includes(email)) {
+      return (meta.tier as Tier) ?? 'free';
+    }
+
+    await client.users.updateUserMetadata(userId, {
+      publicMetadata: {
+        ...meta,
+        tier: 'pro',
+        proSince: meta.proSince ?? new Date().toISOString(),
+        ownerOverride: true,
+      },
+    });
+    return 'pro';
+  } catch {
+    // Never block the request on a Clerk hiccup.
+    return 'free';
+  }
+}
 
 /**
  * Read the current authenticated user's tier server-side.
  * Defaults to 'free' if no metadata is set.
+ *
+ * Hot path: cheap sessionClaims read.
+ * Slow path: only runs the owner-promotion lookup if the user isn't
+ * already Pro AND OWNER_EMAILS is configured. Once promoted, future
+ * calls short-circuit on the hot path.
  */
 export async function getCurrentTier(): Promise<Tier> {
   const { userId, sessionClaims } = await auth();
   if (!userId) return 'free';
+
   const meta = (sessionClaims?.publicMetadata ?? {}) as TierMetadata;
-  return meta.tier === 'pro' ? 'pro' : 'free';
+  if (meta.tier === 'pro') return 'pro';
+
+  // Lazy owner promotion. Only runs on free users when OWNER_EMAILS is set.
+  if (getOwnerEmails().length > 0) {
+    const promoted = await ensureOwnerPromotion(userId);
+    if (promoted === 'pro') return 'pro';
+  }
+
+  return 'free';
 }
 
 /**
