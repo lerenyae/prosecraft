@@ -2,9 +2,10 @@
 
 import { useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@clerk/nextjs';
+import Link from 'next/link';
 import { useStore } from '@/lib/store';
-import { Plus, Calendar, PenTool, Upload, Trash2, Download, RotateCcw } from 'lucide-react';
-import { downloadBackup, restoreBackup } from '@/lib/backup';
+import { Plus, Calendar, PenTool, Upload, Trash2, Sparkles } from 'lucide-react';
 
 // Calculate word count for a specific project by reading chapters/scenes from localStorage
 function getProjectWordCount(projectId: string): number {
@@ -26,6 +27,8 @@ function getProjectWordCount(projectId: string): number {
 }
 import ThemeToggle from '@/components/ThemeToggle';
 import OnboardingModal from '@/components/OnboardingModal';
+import PlanBadge from '@/components/PlanBadge';
+import SettingsMenu from '@/components/SettingsMenu';
 
 const GENRE_OPTIONS = [
   'Mystery/Thriller',
@@ -45,8 +48,15 @@ const GENRE_OPTIONS = [
 export default function Dashboard() {
   const { projects, createProject, deleteProject, createChapter, createScene, updateScene } = useStore();
   const router = useRouter();
+  const { user } = useUser();
+  const tier = (user?.publicMetadata?.tier as string) || 'free';
+  const isPro = tier === 'pro';
+  const FREE_PROJECT_CAP = 1;
+  const atFreeProjectCap = !isPro && projects.length >= FREE_PROJECT_CAP;
+
   const [showModal, setShowModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCapModal, setShowCapModal] = useState(false);
   const [title, setTitle] = useState('');
   const [genre, setGenre] = useState(GENRE_OPTIONS[0]);
   const [description, setDescription] = useState('');
@@ -54,9 +64,6 @@ export default function Dashboard() {
   const [importFileName, setImportFileName] = useState('');
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const restoreInputRef = useRef<HTMLInputElement>(null);
-  const [backupBusy, setBackupBusy] = useState(false);
-  const [backupNote, setBackupNote] = useState<string | null>(null);
 
   // Calculate word counts for all projects
   const wordCounts = useMemo(() => {
@@ -68,42 +75,14 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projects]);
 
-  const handleBackup = () => {
-    try {
-      setBackupBusy(true);
-      const { keysExported, filename } = downloadBackup();
-      setBackupNote(`Saved ${filename} (${keysExported} keys).`);
-    } catch (err) {
-      setBackupNote(err instanceof Error ? `Backup failed: ${err.message}` : 'Backup failed.');
-    } finally {
-      setBackupBusy(false);
-      setTimeout(() => setBackupNote(null), 4000);
-    }
-  };
-
-  const handleRestoreFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    e.target.value = ''; // reset so same file can be picked again later
-    const ok = window.confirm(
-      'Restoring will REPLACE all your current SeedQuill data with the contents of this backup. This cannot be undone. Continue?'
-    );
-    if (!ok) return;
-    try {
-      setBackupBusy(true);
-      const { keysRestored, exportedAt } = await restoreBackup(file);
-      const when = exportedAt ? ` (backup from ${new Date(exportedAt).toLocaleString()})` : '';
-      setBackupNote(`Restored ${keysRestored} keys${when}. Reloading…`);
-      setTimeout(() => window.location.reload(), 800);
-    } catch (err) {
-      setBackupNote(err instanceof Error ? `Restore failed: ${err.message}` : 'Restore failed.');
-      setBackupBusy(false);
-      setTimeout(() => setBackupNote(null), 5000);
-    }
-  };
-
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
+    if (atFreeProjectCap) {
+      // Free tier: 1 active manuscript. Block create + show upgrade modal.
+      setShowModal(false);
+      setShowCapModal(true);
+      return;
+    }
     if (title.trim()) {
       const newProject = createProject(title.trim(), genre);
       setTitle('');
@@ -116,6 +95,11 @@ export default function Dashboard() {
 
   const handleImport = () => {
     if (!title.trim() || !importText.trim()) return;
+    if (atFreeProjectCap) {
+      setShowImportModal(false);
+      setShowCapModal(true);
+      return;
+    }
 
     const newProject = createProject(title.trim(), genre);
 
@@ -263,28 +247,23 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             <PenTool className="w-5 h-5 text-[var(--color-accent)]" />
             <h1 className="text-xl font-bold tracking-tight">SeedQuill</h1>
+            <PlanBadge className="ml-2" />
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            {!isPro && (
+              <Link
+                href="/pricing"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--color-accent)] text-[var(--color-bg-primary)] hover:bg-[var(--color-accent-dark)] transition-colors mr-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Upgrade
+              </Link>
+            )}
+            <ThemeToggle />
+            <SettingsMenu />
+          </div>
         </div>
       </div>
-
-      {/* Hidden file input for backup restore (used by both empty + populated states) */}
-      <input
-        ref={restoreInputRef}
-        type="file"
-        accept=".json,application/json"
-        className="hidden"
-        onChange={handleRestoreFile}
-      />
-
-      {/* Backup/Restore status toast */}
-      {backupNote && (
-        <div className="max-w-7xl mx-auto px-6 pt-4">
-          <div className="text-xs px-3 py-2 rounded-md bg-[var(--color-surface-alt)] border border-[var(--color-border)] text-[var(--color-text-secondary)]">
-            {backupNote}
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-12">
@@ -312,15 +291,10 @@ export default function Dashboard() {
                 <Upload className="w-5 h-5" />
                 Import Manuscript
               </button>
-              <button
-                onClick={() => restoreInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors"
-                title="Restore from a previously downloaded backup"
-              >
-                <RotateCcw className="w-5 h-5" />
-                Restore Backup
-              </button>
             </div>
+            <p className="mt-6 text-xs text-[var(--color-text-muted)]">
+              Have a backup file? Use the settings menu (top right) to restore.
+            </p>
           </div>
         ) : (
           <>
@@ -333,24 +307,6 @@ export default function Dashboard() {
                 </p>
               </div>
               <div className="flex gap-2 flex-wrap justify-end">
-                <button
-                  onClick={handleBackup}
-                  disabled={backupBusy}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm disabled:opacity-50"
-                  title="Download a JSON backup of all your projects, chapters, and settings"
-                >
-                  <Download className="w-4 h-4" />
-                  Backup
-                </button>
-                <button
-                  onClick={() => restoreInputRef.current?.click()}
-                  disabled={backupBusy}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm disabled:opacity-50"
-                  title="Restore from a previously downloaded backup"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                  Restore
-                </button>
                 <button
                   onClick={() => setShowImportModal(true)}
                   className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--color-surface)] text-[var(--color-text-primary)] border border-[var(--color-border)] rounded-lg font-medium hover:bg-[var(--color-surface-alt)] transition-colors text-sm"
@@ -451,6 +407,43 @@ export default function Dashboard() {
 
       {/* Onboarding Modal (fires once for new users) */}
       <OnboardingModal />
+
+      {/* Free-tier 1-manuscript cap modal */}
+      {showCapModal && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[var(--color-surface)] rounded-2xl shadow-xl max-w-md w-full border border-[var(--color-border)] overflow-hidden">
+            <div className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-[var(--color-accent)]/10 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-5 h-5 text-[var(--color-accent)]" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold mb-1">One manuscript at a time on Seedling</h2>
+                  <p className="text-sm text-[var(--color-text-secondary)]">
+                    The free plan keeps things focused: one active manuscript. Upgrade to Author for unlimited manuscripts, or archive your current one to start fresh.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 mt-5">
+                <Link
+                  href="/pricing"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg font-medium text-sm hover:bg-[var(--color-accent-dark)] transition-colors"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Upgrade to Author
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowCapModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-[var(--color-surface-alt)] text-[var(--color-text-primary)] rounded-lg font-medium text-sm hover:bg-[var(--color-border)] transition-colors"
+                >
+                  Maybe later
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Project Modal */}
       {showModal && (
@@ -579,8 +572,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--color-bg-secondary)] border-2 border-dashed border-[var(--color-border)] rounded-lg hover:border-[var(--color-accent-light)] transition-colors text-sm text-[var(--color-text-secondary)]"
-                >
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-[var(--color-bg-secondary)] border-2 border-dashed border-[var(--color-border)] rounded-lg hover:border-[var(--color-accent-light)] transition-colors text-sm text-[var(--color-text-secondary)]">
                   <Upload size={16} />
                   {isProcessingFile ? 'Processing file...' : importFileName || 'Choose a file (.txt, .docx, .pdf)'}
                 </button>
@@ -609,8 +601,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => { setShowImportModal(false); setTitle(''); setImportText(''); setImportFileName(''); }}
-                className="flex-1 px-4 py-2 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors font-medium"
-              >
+                className="flex-1 px-4 py-2 text-[var(--color-text-primary)] hover:bg-[var(--color-surface-alt)] rounded-lg transition-colors font-medium">
                 Cancel
               </button>
               <button
@@ -618,7 +609,7 @@ export default function Dashboard() {
                 onClick={handleImport}
                 disabled={!title.trim() || !importText.trim()}
                 className="flex-1 px-4 py-2 bg-[var(--color-accent)] text-[var(--color-bg-primary)] rounded-lg hover:bg-[var(--color-accent-dark)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                >
+              >
                 Import
               </button>
             </div>
