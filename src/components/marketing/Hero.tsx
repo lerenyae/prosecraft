@@ -5,7 +5,7 @@ export function Hero() {
     <section className="pt-[120px] pb-[100px] px-14 max-w-[1200px] mx-auto text-center">
       <span className="inline-flex items-center gap-2 bg-sage-soft text-sage-deep py-1.5 px-3.5 rounded-full text-[13px] font-medium mb-7 border border-sage/20">
         <span className="w-1.5 h-1.5 rounded-full bg-sage" />
-        Now in beta · joining 1,200 novelists
+        Now in beta · built by a writer, for writers
       </span>
 
       <h1 className="font-display font-medium text-bark text-[84px] leading-none tracking-[-3px] mb-6">
@@ -16,7 +16,7 @@ export function Hero() {
 
       <p className="text-[20px] text-muted max-w-[580px] mx-auto mb-10 leading-[1.55]">
         A writing studio for novelists. Outline, draft, and revise your manuscript with AI that
-        learns your voice — not someone else&apos;s.
+        respects your voice. Not its own.
       </p>
 
       <div className="flex gap-3 justify-center mb-[60px]">
@@ -27,18 +27,22 @@ export function Hero() {
           Start your manuscript
         </Link>
         <Link
-          href="#demo"
+          href="/#product"
           className="bg-cream text-bark py-3.5 px-7 rounded-lg font-medium text-[15px] border border-edge hover:bg-cream-2 transition-colors"
         >
-          Watch demo →
+          See how it works →
         </Link>
       </div>
 
       <div className="flex justify-center gap-8 text-[13px] text-muted">
         <MetaItem>Free to start</MetaItem>
-        <MetaItem>Your voice, learned</MetaItem>
+        <MetaItem>Your voice, protected</MetaItem>
         <MetaItem>Export to DOCX, PDF</MetaItem>
       </div>
+
+      <p className="mt-10 text-[12px] text-muted/70 tracking-wide">
+        Built on Claude · Anthropic
+      </p>
     </section>
   );
 }
