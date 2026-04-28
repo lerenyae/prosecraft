@@ -5,13 +5,16 @@
  * entering the studio. Existing users who already chose a plan (publicMetadata.tier
  * is set) are redirected straight to the dashboard.
  *
+ * Owner emails (OWNER_EMAILS env var) are auto-promoted to Pro on first
+ * visit and forwarded to the dashboard — they never see the picker.
+ *
  * This is a server component so the auth + tier check happens before any
  * UI flashes. The actual plan choice cards are a client component.
  */
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import type { TierMetadata } from '@/lib/userTier';
+import { ensureOwnerPromotion } from '@/lib/userTier';
 import { WelcomePlanCards } from './WelcomePlanCards';
 
 export default async function WelcomePage() {
@@ -19,6 +22,13 @@ export default async function WelcomePage() {
   if (!userId) {
     // Not logged in: bounce to sign-up and bring them back here after.
     redirect('/sign-up?after_sign_up_url=%2Fwelcome');
+  }
+
+  // Owner override: if this user's email is in OWNER_EMAILS, promote
+  // them to Pro and skip the picker entirely.
+  const promoted = await ensureOwnerPromotion(userId);
+  if (promoted === 'pro') {
+    redirect('/dashboard');
   }
 
   const client = await clerkClient();
@@ -52,13 +62,6 @@ export default async function WelcomePage() {
 
         <p className="text-center text-[12px] text-muted/70 tracking-wide mt-12">
           Built on Claude · Anthropic
-        </p>
-
-        <p className="text-center text-[13px] text-muted mt-3">
-          Already paid?{' '}
-          <Link href="/dashboard" className="text-sage-deep underline underline-offset-2 hover:text-sage">
-            Skip to your dashboard.
-          </Link>
         </p>
       </div>
     </div>
