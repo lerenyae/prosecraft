@@ -19,7 +19,7 @@ export function Hero() {
         respects your voice. Not its own.
       </p>
 
-      <div className="flex gap-3 justify-center mb-[60px]">
+      <div className="flex flex-wrap gap-3 justify-center mb-7">
         <Link
           href="/dashboard"
           className="bg-bark text-cream py-3.5 px-7 rounded-lg font-medium text-[15px] hover:opacity-95 transition-opacity"
@@ -31,6 +31,14 @@ export function Hero() {
           className="bg-cream text-bark py-3.5 px-7 rounded-lg font-medium text-[15px] border border-edge hover:bg-cream-2 transition-colors"
         >
           See how it works →
+        </Link>
+      </div>
+      <div className="mb-[60px]">
+        <Link
+          href="/pricing"
+          className="text-[14px] text-muted hover:text-bark transition-colors underline underline-offset-4 decoration-edge hover:decoration-bark"
+        >
+          See pricing
         </Link>
       </div>
 
