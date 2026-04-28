@@ -257,17 +257,47 @@ export async function checkAndIncrementAiQuota(): Promise<{
 /**
  * Combined gate: returns a Response if the request must be rejected, else null.
  * Use at the top of paid AI routes:
- *   const block = await enforceAiGate({ proOnly: true });
+ *   const block = await enforceAiGate({ proOnly: true }, request);
  *   if (block) return block;
+ *
+ * Pass the request so we can detect ?internal=1 (system auto-runs) and skip
+ * the increment for those calls. Free users still get blocked at the cap,
+ * but auto-runs (Style Profile on open, Filter Words initial scan) don't
+ * burn assists they didn't ask for.
  */
-export async function enforceAiGate(opts: {
-  proOnly?: boolean;
-  proOnlyMessage?: string;
-}): Promise<Response | null> {
+export async function enforceAiGate(
+  opts: {
+    proOnly?: boolean;
+    proOnlyMessage?: string;
+  },
+  request?: Request
+): Promise<Response | null> {
   const tier = await getCurrentTier();
   if (opts.proOnly && tier === 'free') {
     return upgradeRequired(opts.proOnlyMessage);
   }
+
+  // Detect internal auto-run — does not increment counter, but still
+  // enforces "must have headroom" so a free user at 10/10 can't trigger
+  // unlimited background work.
+  const internal = isInternalCall(request);
+
+  if (tier === 'pro') {
+    return null;
+  }
+
+  if (internal) {
+    // Read-only check — don't increment.
+    const peek = await peekAiQuota();
+    if (!peek.ok) {
+      return quotaExceeded(
+        `You have used all ${peek.limit} free AI assists for today. Resets at midnight UTC.`,
+        peek.resetAt
+      );
+    }
+    return null;
+  }
+
   const q = await checkAndIncrementAiQuota();
   if (!q.ok) {
     return quotaExceeded(
@@ -276,4 +306,44 @@ export async function enforceAiGate(opts: {
     );
   }
   return null;
+}
+
+function isInternalCall(request?: Request): boolean {
+  if (!request) return false;
+  try {
+    const url = new URL(request.url);
+    return url.searchParams.get('internal') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read-only peek at the current quota. Does not increment. Used for
+ * auto-runs that should still respect the cap but not count against it.
+ */
+async function peekAiQuota(): Promise<{
+  ok: boolean;
+  used?: number;
+  limit?: number;
+  resetAt?: string;
+}> {
+  const { userId } = await auth();
+  if (!userId) return { ok: true };
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(userId);
+  const meta = user.publicMetadata as TierMetadata & { dailyAi?: DailyUsage };
+
+  if (meta.tier === 'pro') return { ok: true };
+
+  const today = todayKey();
+  const usage: DailyUsage = meta.dailyAi || {};
+  const used = usage.date === today ? usage.count ?? 0 : 0;
+  const resetAt = tomorrowResetIso();
+
+  if (used >= FREE_DAILY_AI_LIMIT) {
+    return { ok: false, used, limit: FREE_DAILY_AI_LIMIT, resetAt };
+  }
+  return { ok: true, used, limit: FREE_DAILY_AI_LIMIT, resetAt };
 }
