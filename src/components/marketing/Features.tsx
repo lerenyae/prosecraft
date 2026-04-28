@@ -15,7 +15,7 @@ export function Features() {
             <em className="italic text-sage font-medium">In your manuscript.</em>
           </h2>
           <p className="text-[18px] text-muted max-w-[560px] mx-auto leading-[1.55]">
-            SeedQuill is a quiet writing studio with a thoughtful editor close by — the kind of
+            SeedQuill is a quiet writing studio with a thoughtful editor close by. The kind of
             feedback most writers wait years to access.
           </p>
         </div>
@@ -44,7 +44,7 @@ const FEATURES = [
     icon: '✦',
     title: 'Drafts that sound like you',
     body:
-      'SeedQuill learns your voice from your prose — rhythm, imagery, sentence shape — and protects it on every suggestion. No generic AI mush.',
+      'SeedQuill builds a fingerprint of your prose (rhythm, imagery, sentence shape) and protects it on every suggestion. No generic AI mush.',
   },
   {
     icon: '◇',
@@ -56,19 +56,19 @@ const FEATURES = [
     icon: '◎',
     title: 'Whole-Book chat',
     body:
-      'Ask the model anything about your manuscript and it has read all of it. Plot holes, motif tracking, foreshadowing — answered with citations.',
+      'Ask the model anything about your manuscript and it has read all of it. Plot holes, motif tracking, foreshadowing, all answered with citations.',
   },
   {
     icon: '✸',
     title: 'Writing rules you set',
     body:
-      'Lock POV, tense, era, and banned phrases per project. The AI obeys your rules — not whatever your last prompt said.',
+      'Lock POV, tense, era, and banned phrases per project. The AI obeys your rules. Not whatever your last prompt said.',
   },
   {
     icon: '◐',
     title: 'Track changes you control',
     body:
-      'Every AI edit shows up as a tracked change. Accept individually, accept all, or reject — with a clean change summary so you know what shifted.',
+      'Every AI edit shows up as a tracked change. Accept individually, accept all, or reject, with a clean change summary so you know what shifted.',
   },
   {
     icon: '⌘',
