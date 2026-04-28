@@ -10,7 +10,11 @@ interface PlanBadgeProps {
 
 /**
  * Plan badge for dashboard / studio headers.
+ *
  * Reads tier from Clerk publicMetadata. Free is the default.
+ * Author users link to the Stripe Customer Portal so they can manage or
+ * cancel their subscription.
+ * Free users link to /pricing.
  */
 export default function PlanBadge({ className = '' }: PlanBadgeProps) {
   const { user, isLoaded } = useUser();
@@ -21,13 +25,14 @@ export default function PlanBadge({ className = '' }: PlanBadgeProps) {
 
   if (isPro) {
     return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-dark)] text-[var(--color-bg-primary)] ${className}`}
-        title="Author plan: unlimited manuscripts and AI assists"
+      <a
+        href="/api/stripe/portal"
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-dark)] text-[var(--color-bg-primary)] hover:opacity-95 transition-opacity ${className}`}
+        title="Author plan. Click to manage or cancel your subscription."
       >
         <Sparkles className="w-3 h-3" />
         Author
-      </span>
+      </a>
     );
   }
 
