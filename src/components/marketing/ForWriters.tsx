@@ -12,7 +12,7 @@ export function ForWriters() {
             For writers of every kind
           </p>
           <h2 className="font-display text-bark text-[44px] sm:text-[56px] leading-[1.05] tracking-[-1.2px] mb-5">
-            Whatever you're writing,
+            Whatever you&apos;re writing,
             <br />
             <em className="italic text-sage font-medium">SeedQuill meets you here.</em>
           </h2>
@@ -52,7 +52,7 @@ const PERSONAS = [
   {
     name: 'Career authors',
     body:
-      'Manage book six like book one — with manuscript-wide consistency, voice profiles, and a reading partner who actually finished your last draft.',
+      'Manage book six like book one, with manuscript-wide consistency, voice profiles, and a reading partner who actually finished your last draft.',
   },
   {
     name: 'Memoirists',
@@ -60,14 +60,14 @@ const PERSONAS = [
       'Shape lived experience into a structured story. SeedQuill helps with pacing, scene order, and tone without flattening your truth.',
   },
   {
-    name: 'Screenwriters',
+    name: 'Short story + novella writers',
     body:
-      'Use the editor for treatments, beat sheets, and prose passes. Export your scenes when you\'re ready to move into Final Draft or Highland.',
+      'Draft a collection without losing each story’s voice. Style Profile keeps every piece distinct, Beta Reader sharpens the close, export submission-ready DOCX.',
   },
   {
     name: 'Ghostwriters',
     body:
-      'Lock POV and voice profile per project — switch clients without bleeding one voice into another. Export per client, cleanly.',
+      'Lock POV and voice profile per project. Switch clients without bleeding one voice into another. Export per client, cleanly.',
   },
   {
     name: 'Hybrid + indie authors',
