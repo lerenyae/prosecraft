@@ -6,6 +6,7 @@ import { PricingHero } from '@/components/marketing/PricingHero';
 import { PricingTiers } from '@/components/marketing/PricingTiers';
 import { PricingFAQ } from '@/components/marketing/PricingFAQ';
 import { PricingCTA } from '@/components/marketing/PricingCTA';
+import { ComparisonTable } from '@/components/marketing/ComparisonTable';
 import type { Billing } from '@/lib/pricing';
 
 export default function PricingPage() {
@@ -24,6 +25,7 @@ function PricingPageInner() {
 
   const [billing, setBilling] = useState<Billing>(initial);
 
+  // Reflect into URL for shareability — replace, not push.
   useEffect(() => {
     const current = searchParams.get('billing');
     if (current === billing) return;
@@ -38,6 +40,7 @@ function PricingPageInner() {
     <>
       <PricingHero billing={billing} onBillingChange={handleChange} />
       <PricingTiers billing={billing} />
+      <ComparisonTable />
       <PricingFAQ />
       <PricingCTA />
     </>
@@ -45,6 +48,8 @@ function PricingPageInner() {
 }
 
 function PricingFallback() {
+  // Minimal SSR fallback — same hero shell, defaults to yearly so the static
+  // version of the page reads sensibly before hydration.
   return (
     <>
       <PricingHero billing="yearly" onBillingChange={() => {}} />
